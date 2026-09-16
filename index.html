@@ -607,11 +607,37 @@
     document.getElementById('alertCount').textContent = count;
     document.getElementById('alertBannerCount').textContent = count;
 
-    // Keep the fallback view stable. Live data updates these indicators through applySnapshot().
+    // Fallback sensor indicators must not be inferred from unrelated alarms.
+    // Live data updates these indicators through applySnapshot().
     var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
     sensors.forEach(function(dot, i) {
-      dot.className = 'sensor-dot ' + ((i === 2 || i === 4) && alertData.length ? 'red' : 'green');
+      dot.className = 'sensor-dot green';
     });
+    refreshOverallHealthFromAlarms();
+  }
+
+  function setOverallHealth(level, label) {
+    var map = {
+      normal: { color: '#52C41A', label: '系统健康' },
+      info: { color: '#1890FF', label: '需注意' },
+      warning: { color: '#FADB14', label: '系统警告' },
+      critical: { color: '#FF4D4F', label: '系统异常' }
+    };
+    var item = map[level] || map.normal;
+    var text = label || item.label;
+    ['topStatusDot', 'bigStatusDot'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.style.background = item.color; el.style.boxShadow = '0 0 12px ' + item.color; }
+    });
+    setText('topStatusText', text); setText('healthText', text);
+    var healthText = document.getElementById('healthText');
+    if (healthText) healthText.style.color = item.color;
+  }
+
+  function refreshOverallHealthFromAlarms() {
+    var hasCritical = alertData.some(function(item) { return item.severity === 'critical'; });
+    var hasWarning = alertData.some(function(item) { return item.severity === 'warning'; });
+    setOverallHealth(hasCritical ? 'critical' : hasWarning ? 'warning' : 'normal');
   }
 
   // ==================== TAB SWITCHING ====================
@@ -955,12 +981,6 @@
   function applySnapshot(data) {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     var health = data.health || {};
-    var levelMap = { normal:'#52C41A', info:'#1890FF', warning:'#FADB14', critical:'#FA8C16', emergency:'#FF4D4F' };
-    var color = levelMap[health.level] || '#52C41A';
-    var label = health.label || '系统健康';
-    ['topStatusDot', 'bigStatusDot'].forEach(function(id) { var el = document.getElementById(id); if (el) { el.style.background = color; el.style.boxShadow = '0 0 10px ' + color; } });
-    setText('topStatusText', label); setText('healthText', label);
-    var healthText = document.getElementById('healthText'); if (healthText) healthText.style.color = color;
     var motion = data.motion || {}, battery = data.battery || {};
     setText('currentPosition', motion.position); setText('currentSpeed', motion.speed); setText('targetPosition', motion.target); setText('tcpPosition', motion.tcp);
     setText('uptime', data.uptime); setText('remainingTime', battery.remainingMinutes !== undefined ? battery.remainingMinutes + 'm' : undefined);
@@ -974,7 +994,12 @@
     setText('operationMode', data.operationMode);
     setText('networkIp', data.network && data.network.ip ? 'IP ' + data.network.ip : undefined);
     setText('alertCount', health.alertCount); setText('alertBannerCount', health.alertCount);
-    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { dot.className = 'sensor-dot ' + (data.sensors[sensorNames[index]] ? 'green' : 'red'); }); }
+    var sensorFault = false;
+    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var isHealthy = data.sensors[sensorNames[index]] !== false; if (!isHealthy) sensorFault = true; dot.className = 'sensor-dot ' + (isHealthy ? 'green' : 'red'); }); }
+    var rank = { normal: 0, info: 1, warning: 2, critical: 3, emergency: 4 };
+    var healthLevel = health.level || 'normal';
+    if (sensorFault && (rank[healthLevel] || 0) < rank.critical) healthLevel = 'critical';
+    setOverallHealth(healthLevel === 'emergency' ? 'critical' : healthLevel, sensorFault && health.level === 'normal' ? '设备异常' : health.label);
     setText('connectionInfo', '已连接 · ' + new Date().toLocaleTimeString('zh-CN', { hour12:false }) + ' 更新');
   }
 
