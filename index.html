@@ -973,17 +973,32 @@
     return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
   }
 
+  var demoAlertTemplates = {
+    critical: [
+      { title: '演示：左臂关节温度异常', code: 'D-C001', desc: '演示数据：左臂关节温度超过安全阈值。', suggestion: '演示处理建议：停止相关动作并检查散热与传感器。', label: '实时曲线 · 演示温度 (°C)', values: [58, 61, 65, 69, 73, 77, 80, 83, 81, 79] },
+      { title: '演示：右轮编码器信号丢失', code: 'D-C002', desc: '演示数据：右轮编码器连续丢失反馈脉冲。', suggestion: '演示处理建议：检查编码器接线、供电及机械联轴器。', label: '实时曲线 · 演示编码器脉冲 (counts)', values: [1220, 1205, 1180, 960, 650, 330, 80, 0, 0, 0] },
+      { title: '演示：电池电压低于保护阈值', code: 'D-C003', desc: '演示数据：电池电压低于安全保护阈值，存在掉电风险。', suggestion: '演示处理建议：停止高功耗作业并立即连接充电设备。', label: '实时曲线 · 演示电池电压 (V)', values: [25.1, 24.7, 24.3, 23.9, 23.5, 23.1, 22.8, 22.6, 22.5, 22.4] },
+      { title: '演示：激光雷达通信中断', code: 'D-C004', desc: '演示数据：激光雷达数据流超过 3 秒未更新。', suggestion: '演示处理建议：检查雷达供电、网线与通信进程。', label: '实时曲线 · 演示雷达帧率 (Hz)', values: [10, 10, 10, 9, 7, 4, 1, 0, 0, 0] }
+    ],
+    warning: [
+      { title: '演示：电池电量偏低', code: 'D-W001', desc: '演示数据：电池电量低于预警阈值。', suggestion: '演示处理建议：尽快返回充电点，避免电池过放。', label: '实时曲线 · 演示电量 (%)', values: [38, 34, 31, 28, 25, 22, 19, 17, 16, 15] },
+      { title: '演示：网络通信延迟升高', code: 'D-W002', desc: '演示数据：与核心节点的通信延迟持续高于预警阈值。', suggestion: '演示处理建议：检查网络信号、交换机和附近干扰源。', label: '实时曲线 · 演示通信延迟 (ms)', values: [42, 48, 55, 68, 74, 96, 118, 135, 121, 110] },
+      { title: '演示：摄像头帧率波动', code: 'D-W003', desc: '演示数据：摄像头帧率短时下降，视觉任务可能受影响。', suggestion: '演示处理建议：检查带宽占用、相机接口和镜头遮挡。', label: '实时曲线 · 演示摄像头帧率 (fps)', values: [30, 30, 29, 27, 23, 19, 22, 25, 21, 24] },
+      { title: '演示：碰撞条信号抖动', code: 'D-W004', desc: '演示数据：碰撞条输入在短时间内多次切换。', suggestion: '演示处理建议：检查防撞条固定状态、线束与灵敏度配置。', label: '实时曲线 · 演示碰撞条信号', values: [0, 0, 1, 0, 1, 1, 0, 1, 0, 0] }
+    ]
+  };
+  var lastDemoTemplateIndex = { critical: -1, warning: -1 };
+
   function addDemoAlert(severity) {
     if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    var templates = demoAlertTemplates[severity];
+    var templateIndex = Math.floor(Math.random() * templates.length);
+    if (templates.length > 1 && templateIndex === lastDemoTemplateIndex[severity]) templateIndex = (templateIndex + 1) % templates.length;
+    lastDemoTemplateIndex[severity] = templateIndex;
+    var template = templates[templateIndex];
     var isCritical = severity === 'critical';
     var id = 'DEMO-' + Date.now();
-    var item = isCritical ? {
-      id: id, title: '演示：左臂关节温度异常', severity: 'critical', code: 'D-C' + String(alertData.length + 1).padStart(3, '0'), time: demoTime(),
-      desc: '演示数据：左臂关节温度超过安全阈值。', suggestion: '演示处理建议：停止相关动作并检查散热与传感器。', label: '实时曲线 · 演示温度 (°C)', values: [58, 61, 65, 69, 73, 77, 80, 83, 81, 79]
-    } : {
-      id: id, title: '演示：电池电量偏低', severity: 'warning', code: 'D-W' + String(alertData.length + 1).padStart(3, '0'), time: demoTime(),
-      desc: '演示数据：电池电量低于预警阈值。', suggestion: '演示处理建议：尽快返回充电点，避免电池过放。', label: '实时曲线 · 演示电量 (%)', values: [38, 34, 31, 28, 25, 22, 19, 17, 16, 15]
-    };
+    var item = Object.assign({}, template, { id: id, severity: severity, time: demoTime(), values: template.values.slice() });
     alertData.unshift(item);
     currentAlertIndex = 0;
     updateAlertIndicators();
