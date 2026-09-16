@@ -30,6 +30,7 @@ Before `index.html`'s main script, the deployment can inject an adapter:
 <script>
 window.ROBOT_DATA_ADAPTER = {
   getSnapshot: () => existingRobotBridge.getSnapshot(),
+  getAlarms: () => existingRobotBridge.getAlarms(),
   getWorkSummary: () => existingRobotBridge.getWorkSummary(),
   sendCommand: (path, body) => existingRobotBridge.sendCommand(path, body)
 };

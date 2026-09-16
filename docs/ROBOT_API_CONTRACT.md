@@ -74,6 +74,7 @@
 ```js
 window.ROBOT_DATA_ADAPTER = {
   getSnapshot: async () => snapshot,
+  getAlarms: async () => alarms,
   getWorkSummary: async () => workSummary,
   sendCommand: async (path, body) => ({ accepted: true, commandId: '...' })
 };

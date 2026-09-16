@@ -49,14 +49,16 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
     document.getElementById('alertHeaderCount').textContent = count;
     document.getElementById('alertBanner').style.display = count ? 'flex' : 'none';
 
-    // In demo mode, sensor switches control the fallback indicators directly.
-    // Live data updates these indicators through applySnapshot().
-    var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
-    var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
-    sensors.forEach(function(dot, i) {
-      var healthy = demoSensorState[sensorNames[i]] !== false;
-      dot.className = 'sensor-dot ' + (healthy ? 'green' : 'red');
-    });
+    // Only demo mode uses the editable sensor switches. Live state comes from
+    // applySnapshot() and must never be overwritten by a local alert refresh.
+    if (!ROBOT_DATA_ADAPTER && !ROBOT_API_BASE) {
+      var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
+      var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
+      sensors.forEach(function(dot, i) {
+        var healthy = demoSensorState[sensorNames[i]] !== false;
+        dot.className = 'sensor-dot ' + (healthy ? 'green' : 'red');
+      });
+    }
     refreshOverallHealthFromAlarms();
   }
 
@@ -79,10 +81,11 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
   }
 
   function refreshOverallHealthFromAlarms() {
-    var hasCritical = alertData.some(function(item) { return item.severity === 'critical'; });
-    var hasWarning = alertData.some(function(item) { return item.severity === 'warning'; });
+    var rank = { normal: 0, info: 1, warning: 2, critical: 3, emergency: 4 };
+    var level = alertData.reduce(function(highest, item) { return (rank[item.severity] || 0) > (rank[highest] || 0) ? item.severity : highest; }, 'normal');
     var hasDeviceFault = Object.keys(demoSensorState).some(function(key) { return demoSensorState[key] === false; });
-    setOverallHealth(hasCritical || hasDeviceFault ? 'critical' : hasWarning ? 'warning' : 'normal');
+    if (hasDeviceFault && (rank[level] || 0) < rank.critical) level = 'critical';
+    setOverallHealth(level === 'emergency' ? 'critical' : level, level === 'emergency' ? '紧急停机' : undefined);
   }
 
   // ==================== TAB SWITCHING ====================
@@ -195,8 +198,8 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
       div.className = 'alert-item' + (index === currentAlertIndex ? ' active' : '');
       div.innerHTML =
         '<div class="alert-item-top">' +
-          '<span class="alert-severity ' + (item.severity === 'critical' ? 'critical' : 'warning') + '">' +
-            (item.severity === 'critical' ? '紧急' : '警告') +
+          '<span class="alert-severity ' + ((item.severity === 'critical' || item.severity === 'emergency') ? 'critical' : 'warning') + '">' +
+            (item.severity === 'emergency' ? '紧急' : item.severity === 'critical' ? '严重' : item.severity === 'info' ? '提示' : '警告') +
           '</span>' +
           '<span class="alert-title">' + item.title + '</span>' +
         '</div>' +
@@ -634,6 +637,24 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
     request.then(applySnapshot).catch(function() { addLog('warn', '警告', '实机数据暂不可用，保留最近状态', '数据接口'); });
   }
 
+  function applyAlarms(data) {
+    var payload = data && data.data ? data.data : data;
+    var items = Array.isArray(payload) ? payload : (payload && payload.alarms);
+    if (!Array.isArray(items)) return;
+    alertData = items;
+    currentAlertIndex = 0;
+    updateAlertIndicators();
+    if (document.getElementById('tab-alerts').style.display !== 'none') initAlertsView();
+  }
+
+  function requestAlarms() {
+    var request;
+    if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getAlarms === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getAlarms());
+    else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/alarms').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
+    else return;
+    request.then(applyAlarms).catch(function() { addLog('warn', '警告', '未获取到实时告警，保留最近数据', '数据接口'); });
+  }
+
   function invokeRobotCommand(path, body, successText) {
     var request;
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.sendCommand === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.sendCommand(path, body || {}));
@@ -647,7 +668,9 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
   renderLogs();
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) {
     requestSnapshot();
+    requestAlarms();
     setInterval(requestSnapshot, 1000);
+    setInterval(requestAlarms, 1000);
   }
 
   // HTML touch handlers intentionally use these stable global entry points.
