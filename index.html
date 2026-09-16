@@ -437,7 +437,7 @@
     <!-- Tab: 告警 (real data) -->
     <div class="tab-content alert-page" id="tab-alerts" style="display:none;">
       <div class="alert-header">
-        <span>实时告警 (4)</span>
+        <span>实时告警 (<span id="alertHeaderCount">4</span>)</span>
         <span class="time" id="alertPageTime">2026-08-06 14:23:18</span>
       </div>
       <div class="alert-body">
@@ -462,8 +462,8 @@
             <canvas class="chart-canvas" id="alertChart"></canvas>
           </div>
           <div class="detail-actions">
-            <button class="btn btn-primary" onclick="investigateAlert()">调查</button>
-            <button class="btn btn-danger" onclick="resolveAlert()">确认恢复</button>
+            <button class="btn btn-primary" id="btnInvestigate" onclick="investigateAlert()">调查</button>
+            <button class="btn btn-danger" id="btnResolve" onclick="resolveAlert()">确认恢复</button>
           </div>
         </div>
       </div>
@@ -609,6 +609,7 @@
     var count = alertData.length;
     document.getElementById('alertCount').textContent = count;
     document.getElementById('alertBannerCount').textContent = count;
+    document.getElementById('alertHeaderCount').textContent = count;
 
     // Fallback sensor indicators must not be inferred from unrelated alarms.
     // Live data updates these indicators through applySnapshot().
@@ -743,6 +744,10 @@
   function renderAlertList() {
     var list = document.getElementById('alertList');
     list.innerHTML = '';
+    if (!alertData.length) {
+      list.innerHTML = '<div style="padding:24px;color:#888;text-align:center;">暂无未处理告警</div>';
+      return;
+    }
     alertData.forEach(function(item, index) {
       var div = document.createElement('div');
       div.className = 'alert-item' + (index === currentAlertIndex ? ' active' : '');
@@ -765,6 +770,9 @@
   function selectAlert(index) {
     currentAlertIndex = index;
     var item = alertData[index];
+    if (!item) { showNoActiveAlerts(); return; }
+    document.getElementById('btnInvestigate').disabled = false;
+    document.getElementById('btnResolve').disabled = false;
     document.getElementById('detailCode').textContent = item.code;
     document.getElementById('detailTitle').textContent = item.title;
     document.getElementById('detailDesc').textContent = item.desc;
@@ -844,13 +852,46 @@
 
   function investigateAlert() {
     var item = alertData[currentAlertIndex];
+    if (!item) return;
     alert('已开始调查：' + item.code + ' ' + item.title);
+  }
+
+  function showNoActiveAlerts() {
+    document.getElementById('detailCode').textContent = '--';
+    document.getElementById('detailTitle').textContent = '暂无未处理告警';
+    document.getElementById('detailDesc').textContent = '当前没有需要确认恢复的告警。';
+    document.getElementById('detailSuggestion').textContent = '机器人状态正常。';
+    document.getElementById('chartLabel').textContent = '暂无实时告警曲线';
+    document.getElementById('btnInvestigate').disabled = true;
+    document.getElementById('btnResolve').disabled = true;
+    var canvas = document.getElementById('alertChart');
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function acknowledgeAlertLocally(id) {
+    var index = alertData.findIndex(function(alert) { return alert.id === id; });
+    if (index < 0) return;
+    var item = alertData[index];
+    alertData.splice(index, 1);
+    addLog('info', '告警恢复', '已确认恢复 ' + item.code + ' ' + item.title, '告警模块');
+    updateAlertIndicators();
+    renderAlertList();
+    if (alertData.length) selectAlert(Math.min(index, alertData.length - 1));
+    else showNoActiveAlerts();
   }
 
   function resolveAlert() {
     var item = alertData[currentAlertIndex];
+    if (!item) return;
     if (confirm('确认恢复告警 ' + item.code + '？\n' + item.title)) {
-      invokeRobotCommand('/alarms/' + item.id + '/acknowledge', {}, '已确认恢复 ' + item.code);
+      if (!ROBOT_DATA_ADAPTER && !ROBOT_API_BASE) {
+        acknowledgeAlertLocally(item.id);
+        alert('演示模式：已确认恢复 ' + item.code);
+        return;
+      }
+      invokeRobotCommand('/alarms/' + item.id + '/acknowledge', {}, '已确认恢复 ' + item.code)
+        .then(function(success) { if (success) acknowledgeAlertLocally(item.id); });
     }
   }
 
@@ -931,7 +972,8 @@
     updateAlertPageTime();
     renderAlertList();
     setTimeout(function() {
-      drawAlertChart(alertData[currentAlertIndex].values);
+      if (alertData.length) drawAlertChart(alertData[currentAlertIndex].values);
+      else showNoActiveAlerts();
     }, 50);
   }
 
@@ -1017,8 +1059,8 @@
     var request;
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.sendCommand === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.sendCommand(path, body || {}));
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) }).then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
-    else { alert('未接入实机控制接口。演示模式下不会发送控制命令。'); return; }
-    request.then(function() { addLog('info', '命令', successText, '背部屏幕'); }).catch(function() { alert('命令未执行，请检查实机连接和权限。'); });
+    else { alert('未接入实机控制接口。演示模式下不会发送控制命令。'); return Promise.resolve(false); }
+    return request.then(function() { addLog('info', '命令', successText, '背部屏幕'); return true; }).catch(function() { alert('命令未执行，请检查实机连接和权限。'); return false; });
   }
 
   function softEmergencyStop() { if (confirm('确认急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求急停'); }
