@@ -322,7 +322,7 @@
     <div class="right">
       <span>&#x1F50B; <span id="batteryTop">85%</span></span>
       <span id="clockDisplay">14:23</span>
-      <span>IP 192.168.1.10</span>
+      <span id="networkIp">IP 192.168.1.10</span>
     </div>
   </div>
 
@@ -369,23 +369,23 @@
 
       <!-- Row 3: Joint Angles + Load -->
       <div class="card joint-row">
-        <span class="joint-item"><span class="joint-label">J1</span> 15°</span>
+        <span class="joint-item"><span class="joint-label">J1</span> <span id="joint1">15°</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J2</span> 23°</span>
+        <span class="joint-item"><span class="joint-label">J2</span> <span id="joint2">23°</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J3</span> -8°</span>
+        <span class="joint-item"><span class="joint-label">J3</span> <span id="joint3">-8°</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J4</span> 42°</span>
+        <span class="joint-item"><span class="joint-label">J4</span> <span id="joint4">42°</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J5</span> 11°</span>
+        <span class="joint-item"><span class="joint-label">J5</span> <span id="joint5">11°</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J6</span> 5°</span>
+        <span class="joint-item"><span class="joint-label">J6</span> <span id="joint6">5°</span></span>
         <div class="joint-meta">
-          <span>负载 <span class="meta-value">2.3kg</span></span>
+          <span>负载 <span class="meta-value" id="payload">2.3kg</span></span>
           <span class="joint-divider"></span>
-          <span>夹持力 <span class="meta-value">12.5N</span></span>
+          <span>夹持力 <span class="meta-value" id="gripForce">12.5N</span></span>
           <span class="joint-divider"></span>
-          <span>模式 <span class="meta-value" style="color:#52C41A;">自动</span></span>
+          <span>模式 <span class="meta-value" id="operationMode" style="color:#52C41A;">自动</span></span>
         </div>
       </div>
 
@@ -401,7 +401,7 @@
         <span><span class="batt-label">单体</span> <span class="batt-value" id="cellVoltage">3.70V</span></span>
         <span><span class="batt-label">状态</span> <span class="batt-value" id="chargeStatus" style="color:#FADB14;">充电中</span></span>
         <span class="batt-divider">|</span>
-        <span><span class="batt-label">循环</span> <span class="batt-value">12</span></span>
+        <span><span class="batt-label">循环</span> <span class="batt-value" id="chargeCycles">12</span></span>
       </div>
 
       <!-- Row 5: Sensor Status -->
@@ -629,7 +629,7 @@
 
     // Initialize page-specific logic when opened
     if (tabId === 'alerts') initAlertsView();
-    if (tabId === 'detail') renderSummary();
+    if (tabId === 'detail') { renderSummary(); requestWorkSummary(); }
   }
 
   // ==================== DIAGNOSE BUTTON ====================
@@ -854,11 +854,11 @@
     var d = summaryData;
 
     // 本次消耗电量 (Ah) = 上一次结束充电的电量 - 触发时保存的电量
-    var consumptionAh = d.lastChargeAh - d.triggerAh;
+    var consumptionAh = d.consumptionAh !== undefined ? d.consumptionAh : d.lastChargeAh - d.triggerAh;
     document.getElementById('kpiConsumption').innerHTML = consumptionAh.toFixed(2) + '<span class="kpi-unit">Ah</span>';
 
     // 本次作业时长 (秒) = 开始充电的时间戳 - 上一次结束充电的时间戳
-    var durationSec = d.chargeStartTs - d.lastChargeEndTs;
+    var durationSec = d.durationSec !== undefined ? d.durationSec : d.chargeStartTs - d.lastChargeEndTs;
     var h = Math.floor(durationSec / 3600);
     var m = Math.floor((durationSec % 3600) / 60);
     var s = durationSec % 60;
@@ -866,7 +866,7 @@
     document.getElementById('kpiDurationHMS').textContent = h + 'h ' + m + 'm ' + s + 's';
 
     // 平均放电电流 (A) = 消耗电量(Ah) / 作业时长(h)
-    var avgCurrent = consumptionAh / (durationSec / 3600);
+    var avgCurrent = d.avgCurrent !== undefined ? d.avgCurrent : consumptionAh / (durationSec / 3600);
     document.getElementById('kpiCurrent').innerHTML = avgCurrent.toFixed(2) + '<span class="kpi-unit">A</span>';
 
     // 累计总重 = Σ(单次任务重量)
@@ -909,10 +909,11 @@
   // Initialize alert indicators after alertData is defined
   updateAlertIndicators(); // initial run
 
-  // ==================== ROBOT DIAGNOSTIC SERVICE ADAPTER ====================
-  // Deployers set window.ROBOT_DIAGNOSTIC_API before this page loads, e.g.
-  // http://127.0.0.1:8080/api/v1. The browser never communicates with motors,
-  // BMS or sensors directly; the local diagnostic service owns those protocols.
+  // ==================== ROBOT DATA ADAPTER ====================
+  // The deployment may inject window.ROBOT_DATA_ADAPTER to obtain actual data
+  // from the existing ROS2 SDK/bridge. HTTP is only a fallback, not a required
+  // diagnostic-system architecture.
+  var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
   var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   var localLogs = [
     { time: '15:42:18', type: 'fault', label: '故障', text: 'F001 左臂电机温度过高，已触发安全策略', source: '诊断引擎' },
@@ -929,6 +930,19 @@
     }).join('');
   }
 
+  function applyWorkSummary(data) {
+    summaryData = Object.assign({}, summaryData, data || {});
+    if (Array.isArray(data && data.tasks)) summaryData.tasks = data.tasks;
+    renderSummary();
+  }
+
+  function requestWorkSummary() {
+    var request;
+    if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getWorkSummary === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getWorkSummary());
+    else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/work-summary').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
+    if (request) request.then(applyWorkSummary).catch(function() { addLog('warn', '警告', '未获取到本次作业数据，保留最近缓存', '作业模块'); });
+  }
+
   function addLog(type, label, text, source) {
     var now = new Date();
     localLogs.unshift({ time: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0'), type: type, label: label, text: text, source: source });
@@ -939,8 +953,7 @@
   function setText(id, value) { var el = document.getElementById(id); if (el && value !== undefined && value !== null) el.textContent = value; }
 
   function applySnapshot(data) {
-    // Expected snapshot: { health:{level,label}, motion:{position,speed,target,tcp},
-    // battery:{percent,voltage,current,temperature,cellVoltage,chargeStatus,remainingMinutes}, uptime, sensors:{} }
+    // Expected snapshot: health, motion, battery, sensors and optional network fields.
     var health = data.health || {};
     var levelMap = { normal:'#52C41A', info:'#1890FF', warning:'#FADB14', critical:'#FA8C16', emergency:'#FF4D4F' };
     var color = levelMap[health.level] || '#52C41A';
@@ -953,25 +966,38 @@
     setText('uptime', data.uptime); setText('remainingTime', battery.remainingMinutes !== undefined ? battery.remainingMinutes + 'm' : undefined);
     setText('batteryLevel', battery.percent !== undefined ? battery.percent + '%' : undefined); setText('batteryTop', battery.percent !== undefined ? battery.percent + '%' : undefined);
     setText('batteryVoltage', battery.voltage !== undefined ? battery.voltage + 'V' : undefined); setText('batteryCurrent', battery.current !== undefined ? battery.current + 'A' : undefined);
-    setText('batteryTemperature', battery.temperature !== undefined ? battery.temperature + '°C' : undefined); setText('cellVoltage', battery.cellVoltage !== undefined ? battery.cellVoltage + 'V' : undefined); setText('chargeStatus', battery.chargeStatus);
+    setText('batteryTemperature', battery.temperature !== undefined ? battery.temperature + '°C' : undefined); setText('cellVoltage', battery.cellVoltage !== undefined ? battery.cellVoltage + 'V' : undefined); setText('chargeStatus', battery.chargeStatus); setText('chargeCycles', battery.cycles);
+    var joints = motion.joints || data.joints || [];
+    joints.slice(0, 6).forEach(function(value, index) { setText('joint' + (index + 1), typeof value === 'number' ? value.toFixed(1) + '°' : value); });
+    setText('payload', data.payloadKg !== undefined ? data.payloadKg + 'kg' : undefined);
+    setText('gripForce', data.gripForceN !== undefined ? data.gripForceN + 'N' : undefined);
+    setText('operationMode', data.operationMode);
+    setText('networkIp', data.network && data.network.ip ? 'IP ' + data.network.ip : undefined);
+    setText('alertCount', health.alertCount); setText('alertBannerCount', health.alertCount);
     if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { dot.className = 'sensor-dot ' + (data.sensors[sensorNames[index]] ? 'green' : 'red'); }); }
     setText('connectionInfo', '已连接 · ' + new Date().toLocaleTimeString('zh-CN', { hour12:false }) + ' 更新');
   }
 
   function requestSnapshot() {
-    if (!ROBOT_API_BASE) { setText('connectionInfo', '未配置 ROBOT_DIAGNOSTIC_API，正在展示离线样例数据'); return; }
-    fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); }).then(applySnapshot).catch(function() { setText('connectionInfo', '诊断服务不可用，请检查网络与服务地址'); });
+    var request;
+    if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getSnapshot === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getSnapshot());
+    else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
+    else { setText('connectionInfo', '未接入实机数据，正在展示离线样例数据'); return; }
+    request.then(applySnapshot).catch(function() { setText('connectionInfo', '实机数据不可用，请检查 ROS2/服务连接'); });
   }
 
   function invokeRobotCommand(path, body, successText) {
-    if (!ROBOT_API_BASE) { alert('未配置机器人诊断服务。演示模式下不会发送控制命令。'); return; }
-    fetch(ROBOT_API_BASE + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) }).then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); }).then(function() { addLog('info', '命令', successText, '背部屏幕'); }).catch(function() { alert('命令未执行，请检查诊断服务连接和权限。'); });
+    var request;
+    if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.sendCommand === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.sendCommand(path, body || {}));
+    else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) }).then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
+    else { alert('未接入实机控制接口。演示模式下不会发送控制命令。'); return; }
+    request.then(function() { addLog('info', '命令', successText, '背部屏幕'); }).catch(function() { alert('命令未执行，请检查实机连接和权限。'); });
   }
 
   function softEmergencyStop() { if (confirm('确认执行软急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求软急停'); }
   function exportLogs() { var text = localLogs.map(function(log) { return [log.time, log.label, log.text, log.source].join(','); }).join('\n'); var blob = new Blob(['时间,等级,内容,来源\n' + text], {type:'text/csv;charset=utf-8'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'R1-diagnostic-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }
   renderLogs();
-  if (ROBOT_API_BASE) {
+  if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) {
     requestSnapshot();
     setInterval(requestSnapshot, 1000);
   }
