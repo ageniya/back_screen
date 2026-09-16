@@ -187,6 +187,9 @@
     border: 2px solid #FF4D4F;
   }
   .btn-danger:hover { background: rgba(255,77,79,0.1); }
+  .btn-stop { background: #FF4D4F; color: #FFFFFF; }
+  .btn-stop:hover { background: #D9363E; }
+  .btn-diagnose { flex: 1.35; }
 
   /* --- Row 7: Alert Banner (44px) --- */
   .alert-banner {
@@ -290,7 +293,7 @@
   .load-pct.danger { color: #FF4D4F; }
 
   /* ========== LOGS & SAFETY ========== */
-  .log-page, .tool-page { height: 492px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .log-page { height: 492px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
   .page-title { height: 24px; display:flex; align-items:center; justify-content:space-between; font-size:15px; font-weight:600; }
   .page-title span { font-size:11px; color:#AAAAAA; font-weight:400; }
   .log-list { flex:1; overflow-y:auto; border:1px solid #333333; border-radius:4px; background:#1E1E1E; }
@@ -299,12 +302,6 @@
   .log-tag { padding:3px 6px; border-radius:3px; text-align:center; font-size:10px; font-weight:600; }
   .log-tag.info { color:#1890FF; background:rgba(24,144,255,.12); }.log-tag.warn { color:#FADB14; background:rgba(250,219,20,.12); }.log-tag.fault { color:#FF4D4F; background:rgba(255,77,79,.12); }
   .log-export { height:44px; flex:0 0 auto; }
-  .tool-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; flex:1; }
-  .tool-grid.single { grid-template-columns:1fr; }
-  .tool-card { background:#1E1E1E; border:1px solid #333333; border-radius:4px; padding:16px; display:flex; flex-direction:column; justify-content:space-between; }
-  .tool-card h3 { font-size:15px; }.tool-card p { font-size:12px; color:#AAAAAA; line-height:1.6; margin-top:8px; }
-  .soft-stop { background:#FF4D4F; color:#FFF; border:0; border-radius:4px; height:68px; font-size:20px; font-weight:700; cursor:pointer; }
-  .soft-stop:active { transform:scale(.98); }.tool-note { font-size:11px; color:#AAAAAA; text-align:center; }
 </style>
 </head>
 <body>
@@ -417,11 +414,14 @@
 
       <!-- Row 6: Action Buttons -->
       <div class="action-row">
-        <button class="btn btn-primary" id="btnDiagnose" onclick="startDiagnose()">
+        <button class="btn btn-primary btn-diagnose" id="btnDiagnose" onclick="startDiagnose()">
           &#x1F504; 一键诊断
         </button>
         <button class="btn btn-danger" id="btnFaultClear" onclick="clearFault()">
           &#x2715; 故障清除
+        </button>
+        <button class="btn btn-stop" onclick="softEmergencyStop()">
+          &#x26D4; 软急停
         </button>
       </div>
 
@@ -527,15 +527,6 @@
       <button class="btn btn-primary log-export" onclick="exportLogs()">&#x2B07; 导出诊断日志</button>
     </div>
 
-    <!-- Tab: 工具 / 软急停 -->
-    <div class="tab-content tool-page" id="tab-tools" style="display:none;">
-      <div class="page-title">安全工具 <span>请在确认现场安全风险后操作</span></div>
-      <div class="tool-grid single">
-        <div class="tool-card"><div><h3>软急停</h3><p>停止当前运动并保持伺服安全状态。仅在现场确认有风险时使用。</p></div><button class="soft-stop" onclick="softEmergencyStop()">&#x26D4; 软急停</button></div>
-      </div>
-      <div class="tool-note">软急停需要机器人侧权限确认和命令回执。</div>
-    </div>
-
   </div><!-- /main-content -->
 
   <!-- ========== BOTTOM NAV ========== -->
@@ -551,9 +542,6 @@
     </button>
     <button class="nav-tab" data-tab="detail" onclick="switchTab('detail', this)">
       &#x1F4CB; 作业总结
-    </button>
-    <button class="nav-tab" data-tab="tools" onclick="switchTab('tools', this)">
-      &#x2699;&#xFE0F; 工具
     </button>
   </div>
 
