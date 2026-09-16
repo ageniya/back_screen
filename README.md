@@ -1,15 +1,24 @@
 # R1 Robot Back Screen
 
-1024 × 600 touch-oriented local diagnostic screen. This is a standalone static page and does not require npm.
+1024 × 600 touch-oriented local diagnostic screen. The project uses Vite for development and production builds, while retaining a dependency-light browser UI.
 
 ## Run
 
 ```bash
 cd "/home/wangyulong/桌面/back_screen/robot-back-screen"
-python3 -m http.server 8081
+npm install
+npm run dev
 ```
 
-Open `http://127.0.0.1:8081`. It will display stable offline example data until a local diagnostic service is configured.
+Open the address printed by Vite (normally `http://localhost:5173`). It will display stable offline example data until a local diagnostic service is configured.
+
+To create deployment files:
+
+```bash
+npm run build
+```
+
+The generated `dist/` directory can be copied to the back-screen device's web server. See [the project architecture](docs/ARCHITECTURE.md) for the source layout.
 
 ## Connect to the real robot
 
