@@ -27,7 +27,7 @@ window.ROBOT_DATA_ADAPTER = {
 </script>
 ```
 
-`getSnapshot()` is called at 1 Hz. It should provide health, pose/velocity, joint values, payload, battery, network and sensor fields. `getWorkSummary()` supplies the current charge-cycle's 搬运记录、负载和续航消耗。
+`getSnapshot()` is called at 1 Hz. It should provide health, pose/velocity, joint values, payload, battery, network and sensor fields. The top-left model can be supplied as `robotModel` or `identity.model`. `getWorkSummary()` supplies the current charge-cycle's 搬运记录、负载和续航消耗。
 
 For a deployment that already exposes HTTP, the fallback is:
 
