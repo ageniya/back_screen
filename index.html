@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1024, initial-scale=1.0, user-scalable=no">
+<title>R1 背部诊断屏</title>
+<style>
+  /* ========== RESET & BASE ========== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1024px; height: 600px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0D0D0D;
+    color: #FFFFFF;
+    user-select: none;
+  }
+
+  /* ========== MAIN CONTAINER ========== */
+  .screen {
+    width: 1024px; height: 600px;
+    display: flex; flex-direction: column;
+  }
+
+  /* ========== TOP STATUS BAR (44px) ========== */
+  .top-bar {
+    height: 44px;
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: #1E1E1E;
+    border-bottom: 1px solid #333333;
+    flex-shrink: 0;
+  }
+  .top-bar .left   { display: flex; align-items: center; gap: 8px; }
+  .top-bar .center { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #AAAAAA; }
+  .top-bar .right  { display: flex; align-items: center; gap: 14px; font-size: 12px; color: #AAAAAA; font-family: 'Courier New', monospace; }
+  .top-bar .robot-name { font-size: 15px; font-weight: 600; color: #FFFFFF; }
+  .top-bar .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #52C41A;
+    box-shadow: 0 0 6px #52C41A;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+
+  /* ========== MAIN CONTENT (512px) ========== */
+  .main-content {
+    height: 512px;
+    display: flex; flex-direction: column;
+    padding: 10px 12px;
+    gap: 8px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  /* --- Card base --- */
+  .card {
+    background: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 8px 14px;
+    flex-shrink: 0;
+  }
+
+  /* --- Row 1: Health Status (56px) --- */
+  .health-row {
+    height: 56px;
+    display: flex; align-items: center;
+    justify-content: space-between;
+  }
+  .health-row .health-left {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .health-row .big-dot {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #52C41A;
+    box-shadow: 0 0 14px rgba(82,196,26,0.5);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .health-row .health-text {
+    font-size: 18px; font-weight: 600; color: #52C41A;
+  }
+  .health-row .health-right {
+    display: flex; gap: 20px;
+    font-size: 14px; color: #AAAAAA;
+  }
+  .health-right span { font-family: 'Courier New', monospace; color: #FFFFFF; }
+
+  /* --- Row 2: Core Motion Data (72px) --- */
+  .motion-row {
+    height: 72px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    align-items: center;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+  }
+  .motion-row .label { color: #AAAAAA; margin-right: 4px; }
+  .motion-row .value { color: #FFFFFF; }
+
+  /* --- Row 3: Joint Angles + Load (56px) --- */
+  .joint-row {
+    height: 56px;
+    display: flex; align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+  }
+  .joint-row .joint-item {
+    white-space: nowrap;
+    color: #FFFFFF;
+  }
+  .joint-row .joint-label { color: #AAAAAA; font-size: 11px; }
+  .joint-row .joint-divider {
+    width: 1px; height: 20px; background: #333333; margin: 0 4px;
+  }
+  .joint-row .joint-meta {
+    display: flex; align-items: center; gap: 12px;
+    margin-left: auto;
+    font-size: 11px;
+    color: #AAAAAA;
+    white-space: nowrap;
+  }
+  .joint-meta .meta-value { color: #FFFFFF; }
+
+  /* --- Row 4: Battery Details (48px) --- */
+  .battery-row {
+    height: 48px;
+    display: flex; align-items: center;
+    gap: 18px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+  }
+  .battery-row .batt-label { color: #AAAAAA; }
+  .battery-row .batt-value { color: #52C41A; }
+  .battery-row .batt-divider { color: #333333; }
+
+  /* --- Row 5: Sensor Status (44px) --- */
+  .sensor-row {
+    height: 44px;
+    display: flex; align-items: center;
+    gap: 16px;
+    font-size: 12px;
+  }
+  .sensor-row .sensor-item {
+    display: flex; align-items: center; gap: 4px;
+    color: #FFFFFF;
+  }
+  .sensor-row .sensor-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .sensor-dot.green { background: #52C41A; box-shadow: 0 0 4px #52C41A; }
+  .sensor-dot.red   { background: #FF4D4F; box-shadow: 0 0 4px #FF4D4F; }
+
+  /* --- Row 6: Action Buttons (64px) --- */
+  .action-row {
+    height: 64px;
+    display: flex; align-items: center;
+    gap: 16px;
+  }
+  .btn {
+    flex: 1;
+    height: 48px;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: #2196F3;
+    color: #FFFFFF;
+  }
+  .btn-primary:hover { background: #1976D2; }
+  .btn-primary:disabled { background: #555555; color: #999999; cursor: not-allowed; }
+  .btn-danger {
+    background: transparent;
+    color: #FF4D4F;
+    border: 2px solid #FF4D4F;
+  }
+  .btn-danger:hover { background: rgba(255,77,79,0.1); }
+
+  /* --- Row 7: Alert Banner (44px) --- */
+  .alert-banner {
+    height: 44px;
+    display: flex; align-items: center;
+    padding: 0 14px;
+    background: rgba(255,77,79,0.15);
+    border: 1px solid rgba(255,77,79,0.3);
+    border-radius: 4px;
+    color: #FF4D4F;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .alert-banner:hover { background: rgba(255,77,79,0.25); }
+
+  /* ========== BOTTOM NAV (44px) ========== */
+  .bottom-nav {
+    height: 44px;
+    display: flex;
+    background: #1E1E1E;
+    border-top: 1px solid #333333;
+    flex-shrink: 0;
+  }
+  .nav-tab {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    color: #AAAAAA;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    transition: color 0.2s, background 0.2s;
+    gap: 4px;
+  }
+  .nav-tab:hover  { color: #FFFFFF; }
+  .nav-tab.active { color: #1890FF; border-bottom: 2px solid #1890FF; font-weight: 600; }
+
+  /* ========== TAB CONTENT PLACEHOLDER ========== */
+  .tab-content { flex: 1; display: flex; flex-direction: column; }
+  .placeholder-page {
+    display: flex; align-items: center; justify-content: center;
+    flex: 1;
+    font-size: 22px;
+    color: #555555;
+  }
+
+  /* ========== ALERTS PAGE ========== */
+  .alert-page { height: 492px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .alert-header { height: 24px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; }
+  .alert-header .time { font-size: 11px; color: #AAAAAA; font-weight: 400; font-family: 'Courier New', monospace; }
+  .alert-body { flex: 1; display: flex; gap: 10px; overflow: hidden; }
+  .alert-list { width: 45%; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .alert-item { padding: 12px; background: #1E1E1E; border: 1px solid #333333; border-radius: 4px; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+  .alert-item:hover { background: #2A2A2A; }
+  .alert-item.active { background: rgba(24,144,255,0.12); border-color: #1890FF; }
+  .alert-item-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .alert-severity { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+  .alert-severity.critical { background: rgba(255,77,79,0.15); color: #FF4D4F; }
+  .alert-severity.warning { background: rgba(250,219,20,0.15); color: #FADB14; }
+  .alert-title { font-size: 14px; font-weight: 500; color: #FFFFFF; }
+  .alert-item-bottom { display: flex; justify-content: space-between; font-size: 11px; color: #AAAAAA; font-family: 'Courier New', monospace; margin-top: 4px; }
+  .alert-detail { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 14px; background: #1E1E1E; border: 1px solid #333333; border-radius: 4px; overflow: hidden; }
+  .detail-header { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #333333; }
+  .detail-code { font-family: 'Courier New', monospace; font-size: 12px; padding: 2px 6px; background: #333333; border-radius: 3px; color: #AAAAAA; }
+  .detail-title { font-size: 15px; font-weight: 600; }
+  .detail-section { font-size: 12px; line-height: 1.5; }
+  .detail-section .section-label { color: #AAAAAA; margin-bottom: 4px; font-size: 11px; }
+  .detail-section .section-text { color: #FFFFFF; }
+  .detail-suggestion { background: rgba(250,219,20,0.08); border-left: 3px solid #FADB14; padding: 10px 12px; border-radius: 3px; }
+  .chart-box { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .chart-label { font-size: 11px; color: #AAAAAA; margin-bottom: 4px; }
+  .chart-canvas { flex: 1; width: 100%; min-height: 0; background: #161616; border-radius: 4px; }
+  .detail-actions { display: flex; gap: 12px; height: 40px; }
+  .detail-actions .btn { height: 40px; font-size: 14px; }
+
+  /* ========== SUMMARY PAGE (作业总结) ========== */
+  .summary-page { height: 492px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .summary-header { height: 24px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; }
+  .summary-kpi-row { display: flex; gap: 10px; height: 80px; flex-shrink: 0; }
+  .kpi-card { flex: 1; background: #1E1E1E; border: 1px solid #333333; border-radius: 4px; padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; }
+  .kpi-label { font-size: 11px; color: #AAAAAA; }
+  .kpi-value { font-size: 26px; font-weight: 700; font-family: 'Courier New', monospace; }
+  .kpi-unit { font-size: 12px; font-weight: 400; color: #AAAAAA; margin-left: 2px; }
+  .summary-load-row { display: flex; gap: 10px; height: 60px; flex-shrink: 0; }
+  .load-card { flex: 1; background: #1E1E1E; border: 1px solid #333333; border-radius: 4px; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .load-card .load-label { font-size: 13px; color: #AAAAAA; }
+  .load-card .load-value { font-size: 22px; font-weight: 700; font-family: 'Courier New', monospace; color: #1890FF; }
+  .load-card .load-sub { font-size: 11px; color: #AAAAAA; margin-left: 4px; }
+  .summary-table-box { flex: 1; background: #1E1E1E; border: 1px solid #333333; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .summary-table-title { font-size: 12px; color: #AAAAAA; padding: 8px 14px; border-bottom: 1px solid #333333; flex-shrink: 0; }
+  .summary-table-wrap { flex: 1; overflow-y: auto; }
+  .summary-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .summary-table thead th { background: #252525; padding: 6px 12px; text-align: left; color: #AAAAAA; font-weight: 500; font-size: 11px; border-bottom: 1px solid #333333; position: sticky; top: 0; z-index: 1; }
+  .summary-table tbody td { padding: 5px 12px; border-bottom: 1px solid #2A2A2A; color: #FFFFFF; font-family: 'Courier New', monospace; }
+  .summary-table tbody tr:hover { background: rgba(24,144,255,0.06); }
+  .load-pct { color: #52C41A; }
+  .load-pct.warn { color: #FADB14; }
+  .load-pct.danger { color: #FF4D4F; }
+
+  /* ========== LOGS & SAFETY ========== */
+  .log-page, .tool-page { height: 492px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .page-title { height: 24px; display:flex; align-items:center; justify-content:space-between; font-size:15px; font-weight:600; }
+  .page-title span { font-size:11px; color:#AAAAAA; font-weight:400; }
+  .log-list { flex:1; overflow-y:auto; border:1px solid #333333; border-radius:4px; background:#1E1E1E; }
+  .log-item { display:grid; grid-template-columns:110px 78px 1fr 100px; gap:12px; align-items:center; min-height:52px; padding:8px 14px; border-bottom:1px solid #2A2A2A; font-size:12px; }
+  .log-time { color:#AAAAAA; font-family:'Courier New',monospace; font-size:11px; }
+  .log-tag { padding:3px 6px; border-radius:3px; text-align:center; font-size:10px; font-weight:600; }
+  .log-tag.info { color:#1890FF; background:rgba(24,144,255,.12); }.log-tag.warn { color:#FADB14; background:rgba(250,219,20,.12); }.log-tag.fault { color:#FF4D4F; background:rgba(255,77,79,.12); }
+  .log-export { height:44px; flex:0 0 auto; }
+  .tool-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; flex:1; }
+  .tool-card { background:#1E1E1E; border:1px solid #333333; border-radius:4px; padding:16px; display:flex; flex-direction:column; justify-content:space-between; }
+  .tool-card h3 { font-size:15px; }.tool-card p { font-size:12px; color:#AAAAAA; line-height:1.6; margin-top:8px; }
+  .soft-stop { background:#FF4D4F; color:#FFF; border:0; border-radius:4px; height:68px; font-size:20px; font-weight:700; cursor:pointer; }
+  .soft-stop:active { transform:scale(.98); }.tool-note { font-size:11px; color:#AAAAAA; text-align:center; }
+</style>
+</head>
+<body>
+
+<div class="screen">
+
+  <!-- ========== TOP BAR ========== -->
+  <div class="top-bar">
+    <div class="left">
+      <span class="robot-name">&#x1F916; R1</span>
+    </div>
+    <div class="center">
+      <span class="status-dot" id="topStatusDot"></span>
+      <span id="topStatusText">系统健康</span>
+    </div>
+    <div class="right">
+      <span>&#x1F50B; <span id="batteryTop">85%</span></span>
+      <span id="clockDisplay">14:23</span>
+      <span>IP 192.168.1.10</span>
+    </div>
+  </div>
+
+  <!-- ========== MAIN CONTENT ========== -->
+  <div class="main-content" id="mainContent">
+
+    <!-- Tab: 状态 (default) -->
+    <div class="tab-content" id="tab-status">
+
+      <!-- Row 1: Health Status -->
+      <div class="card health-row">
+        <div class="health-left">
+          <div class="big-dot" id="bigStatusDot"></div>
+          <span class="health-text" id="healthText">系统健康</span>
+        </div>
+        <div class="health-right">
+          运行时长 <span id="uptime">2h23m</span>
+          &nbsp;|&nbsp;
+          剩余续航 <span id="remainingTime">42m</span>
+          &nbsp;|&nbsp;
+          告警数 <span id="alertCount" style="color:#FF4D4F;">4</span>
+        </div>
+      </div>
+
+      <!-- Row 2: Core Motion Data -->
+      <div class="card motion-row">
+        <div>
+          <span class="label">当前位置</span>
+          <span class="value" id="currentPosition">X1.23 Y2.34 Z0.56</span>
+        </div>
+        <div>
+          <span class="label">速度</span>
+          <span class="value" id="currentSpeed">0.45 m/s</span>
+        </div>
+        <div>
+          <span class="label">目标点</span>
+          <span class="value" id="targetPosition">X5.00 Y3.00 Z1.20</span>
+        </div>
+        <div>
+          <span class="label">TCP</span>
+          <span class="value" id="tcpPosition">X1.23 Y2.34</span>
+        </div>
+      </div>
+
+      <!-- Row 3: Joint Angles + Load -->
+      <div class="card joint-row">
+        <span class="joint-item"><span class="joint-label">J1</span> 15°</span>
+        <span class="joint-divider"></span>
+        <span class="joint-item"><span class="joint-label">J2</span> 23°</span>
+        <span class="joint-divider"></span>
+        <span class="joint-item"><span class="joint-label">J3</span> -8°</span>
+        <span class="joint-divider"></span>
+        <span class="joint-item"><span class="joint-label">J4</span> 42°</span>
+        <span class="joint-divider"></span>
+        <span class="joint-item"><span class="joint-label">J5</span> 11°</span>
+        <span class="joint-divider"></span>
+        <span class="joint-item"><span class="joint-label">J6</span> 5°</span>
+        <div class="joint-meta">
+          <span>负载 <span class="meta-value">2.3kg</span></span>
+          <span class="joint-divider"></span>
+          <span>夹持力 <span class="meta-value">12.5N</span></span>
+          <span class="joint-divider"></span>
+          <span>模式 <span class="meta-value" style="color:#52C41A;">自动</span></span>
+        </div>
+      </div>
+
+      <!-- Row 4: Battery Details -->
+      <div class="card battery-row">
+        <span><span class="batt-label">电量</span> <span class="batt-value" id="batteryLevel">85%</span></span>
+        <span class="batt-divider">|</span>
+        <span><span class="batt-label">电压</span> <span class="batt-value" id="batteryVoltage">14.8V</span></span>
+        <span><span class="batt-label">电流</span> <span class="batt-value" id="batteryCurrent">3.2A</span></span>
+        <span class="batt-divider">|</span>
+        <span><span class="batt-label">温度</span> <span class="batt-value" id="batteryTemperature">28°C</span></span>
+        <span class="batt-divider">|</span>
+        <span><span class="batt-label">单体</span> <span class="batt-value" id="cellVoltage">3.70V</span></span>
+        <span><span class="batt-label">状态</span> <span class="batt-value" id="chargeStatus" style="color:#FADB14;">充电中</span></span>
+        <span class="batt-divider">|</span>
+        <span><span class="batt-label">循环</span> <span class="batt-value">12</span></span>
+      </div>
+
+      <!-- Row 5: Sensor Status -->
+      <div class="card sensor-row" id="sensorRow">
+        <span class="sensor-item"><span class="sensor-dot green"></span>激光雷达</span>
+        <span class="sensor-item"><span class="sensor-dot green"></span>深度相机</span>
+        <span class="sensor-item"><span class="sensor-dot green"></span>六维力</span>
+        <span class="sensor-item"><span class="sensor-dot green"></span>碰撞条</span>
+        <span class="sensor-item"><span class="sensor-dot green"></span>摄像头</span>
+        <span class="sensor-item"><span class="sensor-dot green"></span>网络</span>
+      </div>
+
+      <!-- Row 6: Action Buttons -->
+      <div class="action-row">
+        <button class="btn btn-primary" id="btnDiagnose" onclick="startDiagnose()">
+          &#x1F504; 一键诊断
+        </button>
+        <button class="btn btn-danger" id="btnFaultClear" onclick="clearFault()">
+          &#x2715; 故障清除
+        </button>
+      </div>
+
+      <!-- Row 7: Alert Banner -->
+      <div class="alert-banner" onclick="goToAlerts()">
+        &#x26A0;&#xFE0F; 当前有 <strong style="margin:0 4px;" id="alertBannerCount">4</strong> 条未处理告警，点击查看 &rarr;
+      </div>
+
+    </div><!-- /tab-status -->
+
+    <!-- Tab: 告警 (real data) -->
+    <div class="tab-content alert-page" id="tab-alerts" style="display:none;">
+      <div class="alert-header">
+        <span>实时告警 (4)</span>
+        <span class="time" id="alertPageTime">2026-08-06 14:23:18</span>
+      </div>
+      <div class="alert-body">
+        <!-- Left: alert list -->
+        <div class="alert-list" id="alertList"></div>
+        <!-- Right: alert detail -->
+        <div class="alert-detail" id="alertDetail">
+          <div class="detail-header">
+            <span class="detail-code" id="detailCode">F001</span>
+            <span class="detail-title" id="detailTitle">左臂电机温度过高</span>
+          </div>
+          <div class="detail-section">
+            <div class="section-label">告警描述</div>
+            <div class="section-text" id="detailDesc">左臂电机温度超过安全阈值，当前温度78℃，阈值70℃。</div>
+          </div>
+          <div class="detail-section detail-suggestion">
+            <div class="section-label" style="color:#FADB14;">处理建议</div>
+            <div class="section-text" id="detailSuggestion">建议立即停机检查电机散热系统，清理散热片灰尘，检查风扇是否正常工作。</div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-label" id="chartLabel">实时曲线 · 电机温度 (°C)</div>
+            <canvas class="chart-canvas" id="alertChart"></canvas>
+          </div>
+          <div class="detail-actions">
+            <button class="btn btn-primary" onclick="investigateAlert()">调查</button>
+            <button class="btn btn-danger" onclick="resolveAlert()">确认恢复</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: 作业总结 -->
+    <div class="tab-content summary-page" id="tab-detail" style="display:none;">
+      <div class="summary-header">
+        <span>作业总结</span>
+        <span style="font-size:11px;color:#AAAAAA;font-weight:400;">充电循环 #12</span>
+      </div>
+      <!-- KPI Row: 电量 · 时长 · 电流 -->
+      <div class="summary-kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">本次消耗电量</div>
+          <div class="kpi-value" style="color:#FADB14;" id="kpiConsumption">--<span class="kpi-unit">Ah</span></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">本次作业时长</div>
+          <div class="kpi-value" style="color:#1890FF;" id="kpiDuration">--<span class="kpi-unit">s</span></div>
+          <div style="font-size:11px;color:#AAAAAA;margin-top:-2px;" id="kpiDurationHMS">--</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">平均放电电流</div>
+          <div class="kpi-value" style="color:#52C41A;" id="kpiCurrent">--<span class="kpi-unit">A</span></div>
+        </div>
+      </div>
+      <!-- Load Summary -->
+      <div class="summary-load-row">
+        <div class="load-card">
+          <span class="load-label">累计总重</span>
+          <span><span class="load-value" id="loadTotal">--</span><span class="load-sub">kg</span></span>
+        </div>
+        <div class="load-card">
+          <span class="load-label">平均负载率 (额定50kg)</span>
+          <span><span class="load-value" id="loadRate">--</span><span class="load-sub">%</span></span>
+        </div>
+      </div>
+      <!-- Task Table -->
+      <div class="summary-table-box">
+        <div class="summary-table-title">任务明细 · 搬运 <strong style="color:#FFFFFF;font-family:'Courier New',monospace;" id="taskCount">0</strong> 次</div>
+        <div class="summary-table-wrap">
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th style="width:10%">#</th>
+                <th style="width:38%">任务名称</th>
+                <th style="width:18%">重量</th>
+                <th style="width:18%">负载率</th>
+                <th style="width:16%">时间</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: 日志 -->
+    <div class="tab-content log-page" id="tab-logs" style="display:none;">
+      <div class="page-title">运行日志 <span id="logStatus">本机缓存 · 最近 200 条</span></div>
+      <div class="log-list" id="logList"></div>
+      <button class="btn btn-primary log-export" onclick="exportLogs()">&#x2B07; 导出诊断日志</button>
+    </div>
+
+    <!-- Tab: 工具 / 软急停 -->
+    <div class="tab-content tool-page" id="tab-tools" style="display:none;">
+      <div class="page-title">安全工具 <span>命令将发送到机器人本地诊断服务</span></div>
+      <div class="tool-grid">
+        <div class="tool-card"><div><h3>软急停</h3><p>停止当前运动并保持伺服安全状态。仅在现场确认有风险时使用。</p></div><button class="soft-stop" onclick="softEmergencyStop()">&#x26D4; 软急停</button></div>
+        <div class="tool-card"><div><h3>诊断连接</h3><p id="connectionInfo">等待本地诊断服务连接</p></div><button class="btn btn-primary" onclick="requestSnapshot()">&#x21BB; 刷新状态</button></div>
+      </div>
+      <div class="tool-note">软急停与故障清除均需要机器人侧权限确认和命令回执。</div>
+    </div>
+
+  </div><!-- /main-content -->
+
+  <!-- ========== BOTTOM NAV ========== -->
+  <div class="bottom-nav">
+    <button class="nav-tab active" data-tab="status" onclick="switchTab('status', this)">
+      &#x1F4CA; 状态
+    </button>
+    <button class="nav-tab" data-tab="alerts" onclick="switchTab('alerts', this)">
+      &#x1F514; 告警
+    </button>
+    <button class="nav-tab" data-tab="logs" onclick="switchTab('logs', this)">
+      &#x1F4DD; 日志
+    </button>
+    <button class="nav-tab" data-tab="detail" onclick="switchTab('detail', this)">
+      &#x1F4CB; 作业总结
+    </button>
+    <button class="nav-tab" data-tab="tools" onclick="switchTab('tools', this)">
+      &#x2699;&#xFE0F; 工具
+    </button>
+  </div>
+
+</div><!-- /screen -->
+
+<script>
+  // ==================== REAL-TIME CLOCK ====================
+  function updateClock() {
+    var now = new Date();
+    var h = String(now.getHours()).padStart(2, '0');
+    var m = String(now.getMinutes()).padStart(2, '0');
+    document.getElementById('clockDisplay').textContent = h + ':' + m;
+  }
+  updateClock();
+  setInterval(updateClock, 10000); // update every 10s
+
+  // ==================== STATUS DOT CYCLE ====================
+  var statusColors = ['#52C41A', '#FADB14', '#FF4D4F'];
+  var statusLabels = ['系统健康', '系统警告', '系统异常'];
+  var statusIndex = 0;
+
+  function cycleStatus() {
+    statusIndex = (statusIndex + 1) % 3;
+    var color = statusColors[statusIndex];
+    var label = statusLabels[statusIndex];
+
+    // Top bar dot
+    var topDot = document.getElementById('topStatusDot');
+    topDot.style.background = color;
+    topDot.style.boxShadow = '0 0 8px ' + color;
+    document.getElementById('topStatusText').textContent = label;
+
+    // Big health dot
+    var bigDot = document.getElementById('bigStatusDot');
+    bigDot.style.background = color;
+    bigDot.style.boxShadow = '0 0 14px ' + color.replace(')', ',0.5)').replace('rgb', 'rgba');
+    // For hex colors, use manual mapping
+    if (color === '#52C41A') bigDot.style.boxShadow = '0 0 14px rgba(82,196,26,0.5)';
+    else if (color === '#FADB14') bigDot.style.boxShadow = '0 0 14px rgba(250,219,20,0.5)';
+    else bigDot.style.boxShadow = '0 0 14px rgba(255,77,79,0.5)';
+
+    var healthText = document.getElementById('healthText');
+    healthText.textContent = label;
+    healthText.style.color = color;
+  }
+  // Status must only change from the robot diagnostic service; never rotate it for display effect.
+
+  // ==================== ALERT COUNT & SENSOR STATUS ====================
+  function updateAlertIndicators() {
+    var count = alertData.length;
+    document.getElementById('alertCount').textContent = count;
+    document.getElementById('alertBannerCount').textContent = count;
+
+    // Keep the fallback view stable. Live data updates these indicators through applySnapshot().
+    var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
+    sensors.forEach(function(dot, i) {
+      dot.className = 'sensor-dot ' + ((i === 2 || i === 4) && alertData.length ? 'red' : 'green');
+    });
+  }
+
+  // ==================== TAB SWITCHING ====================
+  function switchTab(tabId, btn) {
+    // Hide all tab contents
+    var contents = document.querySelectorAll('.tab-content');
+    contents.forEach(function(c) { c.style.display = 'none'; });
+    // Show selected
+    document.getElementById('tab-' + tabId).style.display = 'flex';
+
+    // Update nav active state
+    var tabs = document.querySelectorAll('.nav-tab');
+    tabs.forEach(function(t) { t.classList.remove('active'); });
+    btn.classList.add('active');
+
+    // Initialize page-specific logic when opened
+    if (tabId === 'alerts') initAlertsView();
+    if (tabId === 'detail') renderSummary();
+  }
+
+  // ==================== DIAGNOSE BUTTON ====================
+  function startDiagnose() {
+    var btn = document.getElementById('btnDiagnose');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.innerHTML = '&#x23F3; 诊断中...';
+    setTimeout(function() {
+      btn.disabled = false;
+      btn.innerHTML = '&#x2705; 诊断完成';
+      invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断');
+      setTimeout(function() {
+        btn.innerHTML = '&#x1F504; 一键诊断';
+      }, 2000);
+    }, 3000);
+  }
+
+  // ==================== FAULT CLEAR BUTTON ====================
+  function clearFault() {
+    if (confirm('确认清除已恢复的故障？\n\n未恢复的故障不会被清除。')) invokeRobotCommand('/alarms/clear-recovered', {}, '已请求清除已恢复故障');
+  }
+
+  // ==================== ALERT BANNER CLICK ====================
+  function goToAlerts() {
+    alert('跳转至告警中心\n\n当前有 ' + alertData.length + ' 条未处理告警。');
+    // Auto switch to alerts tab
+    var alertsTab = document.querySelector('.nav-tab[data-tab="alerts"]');
+    if (alertsTab) switchTab('alerts', alertsTab);
+  }
+
+  // ==================== ALERTS DATA & RENDER ====================
+  var alertData = [
+    {
+      id: 'F001', title: '左臂电机温度过高', severity: 'critical', code: 'F001',
+      time: '2024-01-15 14:32:18',
+      desc: '左臂电机温度超过安全阈值，当前温度78℃，阈值70℃。',
+      suggestion: '建议立即停机检查电机散热系统，清理散热片灰尘，检查风扇是否正常工作。',
+      label: '实时曲线 · 电机温度 (°C)',
+      values: [62, 63, 65, 67, 70, 72, 75, 78, 77, 76, 78, 79, 78, 77, 76, 75, 74, 73, 72, 71]
+    },
+    {
+      id: 'F002', title: '右轮编码器异常', severity: 'critical', code: 'F002',
+      time: '2024-01-15 14:28:05',
+      desc: '右轮编码器反馈信号丢失，当前脉冲数0，预期>1200。',
+      suggestion: '检查编码器接线是否松动，确认供电电压正常，必要时更换编码器。',
+      label: '实时曲线 · 编码器脉冲 (counts)',
+      values: [1200, 1180, 1150, 900, 600, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    {
+      id: 'W001', title: '电池电量偏低', severity: 'warning', code: 'W001',
+      time: '2024-01-15 14:15:30',
+      desc: '当前电池电量18%，低于警告阈值20%，建议尽快充电。',
+      suggestion: '降低运行功率或返回充电站，避免电池过放导致设备停机。',
+      label: '实时曲线 · 电池电量 (%)',
+      values: [35, 33, 31, 29, 27, 25, 23, 21, 19, 18, 18, 17, 17, 16, 16, 15, 15, 14, 14, 13]
+    },
+    {
+      id: 'W002', title: '通信延迟波动', severity: 'warning', code: 'W002',
+      time: '2024-01-15 13:45:22',
+      desc: '网络通信延迟波动较大，当前延迟145ms，阈值100ms。',
+      suggestion: '检查网络链路质量，重启通信模块，排查附近干扰源。',
+      label: '实时曲线 · 通信延迟 (ms)',
+      values: [45, 52, 68, 85, 110, 95, 130, 145, 160, 140, 120, 155, 145, 135, 125, 115, 105, 95, 90, 85]
+    }
+  ];
+  var currentAlertIndex = 0;
+
+  function updateAlertPageTime() {
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth() + 1).padStart(2, '0');
+    var d = String(now.getDate()).padStart(2, '0');
+    var h = String(now.getHours()).padStart(2, '0');
+    var min = String(now.getMinutes()).padStart(2, '0');
+    var s = String(now.getSeconds()).padStart(2, '0');
+    var t = y + '-' + m + '-' + d + ' ' + h + ':' + min + ':' + s;
+    var el = document.getElementById('alertPageTime');
+    if (el) el.textContent = t;
+  }
+
+  function renderAlertList() {
+    var list = document.getElementById('alertList');
+    list.innerHTML = '';
+    alertData.forEach(function(item, index) {
+      var div = document.createElement('div');
+      div.className = 'alert-item' + (index === currentAlertIndex ? ' active' : '');
+      div.innerHTML =
+        '<div class="alert-item-top">' +
+          '<span class="alert-severity ' + (item.severity === 'critical' ? 'critical' : 'warning') + '">' +
+            (item.severity === 'critical' ? '紧急' : '警告') +
+          '</span>' +
+          '<span class="alert-title">' + item.title + '</span>' +
+        '</div>' +
+        '<div class="alert-item-bottom">' +
+          '<span>告警码: ' + item.code + '</span>' +
+          '<span>' + item.time + '</span>' +
+        '</div>';
+      div.onclick = function() { selectAlert(index); };
+      list.appendChild(div);
+    });
+  }
+
+  function selectAlert(index) {
+    currentAlertIndex = index;
+    var item = alertData[index];
+    document.getElementById('detailCode').textContent = item.code;
+    document.getElementById('detailTitle').textContent = item.title;
+    document.getElementById('detailDesc').textContent = item.desc;
+    document.getElementById('detailSuggestion').textContent = item.suggestion;
+    document.getElementById('chartLabel').textContent = item.label;
+    renderAlertList();
+    drawAlertChart(item.values);
+  }
+
+  function drawAlertChart(values) {
+    var canvas = document.getElementById('alertChart');
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.scale(dpr, dpr);
+    var w = rect.width;
+    var h = rect.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Grid lines
+    ctx.strokeStyle = '#2A2A2A';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+      var gy = 10 + (h - 20) * i / 4;
+      ctx.moveTo(35, gy);
+      ctx.lineTo(w - 10, gy);
+    }
+    ctx.stroke();
+
+    // Determine scale
+    var min = Math.min.apply(null, values);
+    var max = Math.max.apply(null, values);
+    var range = max - min || 1;
+    min -= range * 0.1;
+    max += range * 0.1;
+
+    // Draw line
+    var plotH = h - 28;
+    var plotW = w - 55;
+    var step = plotW / (values.length - 1);
+    var color = currentAlertIndex < 2 ? '#FF4D4F' : '#FADB14';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    values.forEach(function(v, i) {
+      var x = 35 + i * step;
+      var y = 10 + plotH - ((v - min) / (max - min)) * plotH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Draw points
+    ctx.fillStyle = color;
+    values.forEach(function(v, i) {
+      var x = 35 + i * step;
+      var y = 10 + plotH - ((v - min) / (max - min)) * plotH;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Y-axis labels
+    ctx.fillStyle = '#AAAAAA';
+    ctx.font = '10px "Courier New", monospace';
+    ctx.textAlign = 'right';
+    for (var i = 0; i < 5; i++) {
+      var val = min + (max - min) * (1 - i / 4);
+      var ly = 10 + (h - 20) * i / 4 + 3;
+      ctx.fillText(val.toFixed(0), 30, ly);
+    }
+  }
+
+  function investigateAlert() {
+    var item = alertData[currentAlertIndex];
+    alert('已开始调查：' + item.code + ' ' + item.title);
+  }
+
+  function resolveAlert() {
+    var item = alertData[currentAlertIndex];
+    if (confirm('确认恢复告警 ' + item.code + '？\n' + item.title)) {
+      invokeRobotCommand('/alarms/' + item.id + '/acknowledge', {}, '已确认恢复 ' + item.code);
+    }
+  }
+
+  // ==================== SUMMARY DATA & RENDER ====================
+  var summaryData = {
+    // 上一次结束充电时的电量 (Ah)
+    lastChargeAh: 100,
+    // 触发时保存的电量 (Ah)
+    triggerAh: 73.5,
+    // 上一次结束充电的时间戳 (Unix seconds) — 2026-08-06 08:00:00
+    lastChargeEndTs: 1754668800,
+    // 本次开始充电的时间戳 (Unix seconds) — 2026-08-06 15:30:00
+    chargeStartTs: 1754695800,
+    // 额定最大载重 (kg)
+    ratedLoad: 50,
+    // 本次作业周期内的搬运任务
+    tasks: [
+      { name: '物料搬运 A-12',  weight: 42.5, time: '08:23' },
+      { name: '零件转运 B-07',  weight: 38.0, time: '08:51' },
+      { name: '成品下线 C-03',  weight: 45.2, time: '09:18' },
+      { name: '半成品转运 A-08', weight: 35.8, time: '10:05' },
+      { name: '重型物料 D-01',  weight: 48.1, time: '10:42' },
+      { name: '标准搬运 B-15',  weight: 32.6, time: '11:30' },
+      { name: '精密组件 C-09',  weight: 41.3, time: '13:15' },
+      { name: '包装下线 A-20',  weight: 39.7, time: '14:08' }
+    ]
+  };
+
+  function renderSummary() {
+    var d = summaryData;
+
+    // 本次消耗电量 (Ah) = 上一次结束充电的电量 - 触发时保存的电量
+    var consumptionAh = d.lastChargeAh - d.triggerAh;
+    document.getElementById('kpiConsumption').innerHTML = consumptionAh.toFixed(2) + '<span class="kpi-unit">Ah</span>';
+
+    // 本次作业时长 (秒) = 开始充电的时间戳 - 上一次结束充电的时间戳
+    var durationSec = d.chargeStartTs - d.lastChargeEndTs;
+    var h = Math.floor(durationSec / 3600);
+    var m = Math.floor((durationSec % 3600) / 60);
+    var s = durationSec % 60;
+    document.getElementById('kpiDuration').innerHTML = durationSec.toLocaleString() + '<span class="kpi-unit">s</span>';
+    document.getElementById('kpiDurationHMS').textContent = h + 'h ' + m + 'm ' + s + 's';
+
+    // 平均放电电流 (A) = 消耗电量(Ah) / 作业时长(h)
+    var avgCurrent = consumptionAh / (durationSec / 3600);
+    document.getElementById('kpiCurrent').innerHTML = avgCurrent.toFixed(2) + '<span class="kpi-unit">A</span>';
+
+    // 累计总重 = Σ(单次任务重量)
+    var totalWeight = d.tasks.reduce(function(acc, t) { return acc + t.weight; }, 0);
+    document.getElementById('loadTotal').textContent = totalWeight.toFixed(1);
+
+    // 平均负载率 = Σ(单次任务重量 / 额定最大载重) / 搬运次数 × 100%
+    var sumRate = d.tasks.reduce(function(acc, t) { return acc + t.weight / d.ratedLoad; }, 0);
+    var avgRate = sumRate / d.tasks.length * 100;
+    document.getElementById('loadRate').textContent = avgRate.toFixed(1);
+
+    // 任务数量
+    document.getElementById('taskCount').textContent = d.tasks.length;
+
+    // 任务明细表格
+    var tbody = document.getElementById('taskTableBody');
+    tbody.innerHTML = '';
+    d.tasks.forEach(function(task, i) {
+      var rate = task.weight / d.ratedLoad * 100;
+      var cls = rate >= 90 ? 'danger' : rate >= 80 ? 'warn' : '';
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td style="color:#AAAAAA;">' + (i + 1) + '</td>' +
+        '<td>' + task.name + '</td>' +
+        '<td>' + task.weight.toFixed(1) + ' kg</td>' +
+        '<td class="load-pct' + (cls ? ' ' + cls : '') + '">' + rate.toFixed(1) + '%</td>' +
+        '<td style="color:#AAAAAA;">' + task.time + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function initAlertsView() {
+    updateAlertPageTime();
+    renderAlertList();
+    setTimeout(function() {
+      drawAlertChart(alertData[currentAlertIndex].values);
+    }, 50);
+  }
+
+  // Initialize alert indicators after alertData is defined
+  updateAlertIndicators(); // initial run
+
+  // ==================== ROBOT DIAGNOSTIC SERVICE ADAPTER ====================
+  // Deployers set window.ROBOT_DIAGNOSTIC_API before this page loads, e.g.
+  // http://127.0.0.1:8080/api/v1. The browser never communicates with motors,
+  // BMS or sensors directly; the local diagnostic service owns those protocols.
+  var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
+  var localLogs = [
+    { time: '15:42:18', type: 'fault', label: '故障', text: 'F001 左臂电机温度过高，已触发安全策略', source: '诊断引擎' },
+    { time: '15:38:05', type: 'warn', label: '警告', text: 'W014 核心节点通信延迟波动', source: '网络模块' },
+    { time: '15:31:44', type: 'info', label: '提示', text: '电量低于建议值，建议任务结束后充电', source: '电池管理' },
+    { time: '15:20:10', type: 'info', label: '信息', text: '作业任务 #A-1208 已开始', source: '任务模块' }
+  ];
+
+  function renderLogs() {
+    var list = document.getElementById('logList');
+    if (!list) return;
+    list.innerHTML = localLogs.map(function(log) {
+      return '<div class="log-item"><span class="log-time">' + log.time + '</span><span class="log-tag ' + log.type + '">' + log.label + '</span><span>' + log.text + '</span><span style="color:#AAAAAA;font-size:11px;">' + log.source + '</span></div>';
+    }).join('');
+  }
+
+  function addLog(type, label, text, source) {
+    var now = new Date();
+    localLogs.unshift({ time: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0'), type: type, label: label, text: text, source: source });
+    localLogs = localLogs.slice(0, 200);
+    renderLogs();
+  }
+
+  function setText(id, value) { var el = document.getElementById(id); if (el && value !== undefined && value !== null) el.textContent = value; }
+
+  function applySnapshot(data) {
+    // Expected snapshot: { health:{level,label}, motion:{position,speed,target,tcp},
+    // battery:{percent,voltage,current,temperature,cellVoltage,chargeStatus,remainingMinutes}, uptime, sensors:{} }
+    var health = data.health || {};
+    var levelMap = { normal:'#52C41A', info:'#1890FF', warning:'#FADB14', critical:'#FA8C16', emergency:'#FF4D4F' };
+    var color = levelMap[health.level] || '#52C41A';
+    var label = health.label || '系统健康';
+    ['topStatusDot', 'bigStatusDot'].forEach(function(id) { var el = document.getElementById(id); if (el) { el.style.background = color; el.style.boxShadow = '0 0 10px ' + color; } });
+    setText('topStatusText', label); setText('healthText', label);
+    var healthText = document.getElementById('healthText'); if (healthText) healthText.style.color = color;
+    var motion = data.motion || {}, battery = data.battery || {};
+    setText('currentPosition', motion.position); setText('currentSpeed', motion.speed); setText('targetPosition', motion.target); setText('tcpPosition', motion.tcp);
+    setText('uptime', data.uptime); setText('remainingTime', battery.remainingMinutes !== undefined ? battery.remainingMinutes + 'm' : undefined);
+    setText('batteryLevel', battery.percent !== undefined ? battery.percent + '%' : undefined); setText('batteryTop', battery.percent !== undefined ? battery.percent + '%' : undefined);
+    setText('batteryVoltage', battery.voltage !== undefined ? battery.voltage + 'V' : undefined); setText('batteryCurrent', battery.current !== undefined ? battery.current + 'A' : undefined);
+    setText('batteryTemperature', battery.temperature !== undefined ? battery.temperature + '°C' : undefined); setText('cellVoltage', battery.cellVoltage !== undefined ? battery.cellVoltage + 'V' : undefined); setText('chargeStatus', battery.chargeStatus);
+    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { dot.className = 'sensor-dot ' + (data.sensors[sensorNames[index]] ? 'green' : 'red'); }); }
+    setText('connectionInfo', '已连接 · ' + new Date().toLocaleTimeString('zh-CN', { hour12:false }) + ' 更新');
+  }
+
+  function requestSnapshot() {
+    if (!ROBOT_API_BASE) { setText('connectionInfo', '未配置 ROBOT_DIAGNOSTIC_API，正在展示离线样例数据'); return; }
+    fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); }).then(applySnapshot).catch(function() { setText('connectionInfo', '诊断服务不可用，请检查网络与服务地址'); });
+  }
+
+  function invokeRobotCommand(path, body, successText) {
+    if (!ROBOT_API_BASE) { alert('未配置机器人诊断服务。演示模式下不会发送控制命令。'); return; }
+    fetch(ROBOT_API_BASE + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) }).then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); }).then(function() { addLog('info', '命令', successText, '背部屏幕'); }).catch(function() { alert('命令未执行，请检查诊断服务连接和权限。'); });
+  }
+
+  function softEmergencyStop() { if (confirm('确认执行软急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求软急停'); }
+  function exportLogs() { var text = localLogs.map(function(log) { return [log.time, log.label, log.text, log.source].join(','); }).join('\n'); var blob = new Blob(['时间,等级,内容,来源\n' + text], {type:'text/csv;charset=utf-8'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'R1-diagnostic-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }
+  renderLogs();
+  if (ROBOT_API_BASE) {
+    requestSnapshot();
+    setInterval(requestSnapshot, 1000);
+  }
+</script>
+
+</body>
+</html>
