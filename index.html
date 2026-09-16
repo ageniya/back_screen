@@ -304,10 +304,14 @@
   .log-export { height:44px; flex:0 0 auto; }
   .tool-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed #444; border-radius:6px; background:#161616; color:#AAAAAA; }
   .tool-empty .tool-icon { font-size:34px; margin-bottom:12px; }.tool-empty h3 { font-size:16px; color:#FFFFFF; margin-bottom:8px; }.tool-empty p { font-size:12px; }
-  .tool-panel { flex:1; display:grid; grid-template-columns:1.1fr .9fr; gap:12px; min-height:0; }
+  .tool-panel { flex:1; display:grid; grid-template-columns:1fr; gap:12px; min-height:0; overflow-y:auto; padding-right:2px; }
   .tool-card { border:1px solid #333; border-radius:6px; background:#1E1E1E; padding:16px; }
   .tool-card h3 { font-size:15px; color:#FFF; margin-bottom:6px; }.tool-card p { font-size:12px; color:#AAA; line-height:1.6; }
   .tool-card .tool-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }.tool-card .btn { min-height:40px; flex:1; padding:0 12px; font-size:13px; }
+  .demo-section-title { margin:16px 0 8px; padding-top:12px; border-top:1px solid #333; color:#D9D9D9; font-size:12px; font-weight:600; }
+  .demo-form-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; }
+  .demo-field { display:flex; flex-direction:column; gap:5px; color:#AAA; font-size:11px; }.demo-field input, .demo-field select { width:100%; height:31px; border:1px solid #3A3A3A; border-radius:4px; background:#252525; color:#FFF; padding:0 8px; font:12px 'Courier New', monospace; outline:none; }.demo-field input:focus, .demo-field select:focus { border-color:#1890FF; }
+  .sensor-toggle { display:flex; align-items:center; gap:6px; height:31px; border:1px solid #3A3A3A; border-radius:4px; background:#252525; padding:0 8px; color:#DDD; font-size:12px; }.sensor-toggle input { accent-color:#52C41A; }
 </style>
 </head>
 <body>
@@ -539,8 +543,51 @@
       <div class="tool-panel">
         <div class="tool-card" id="demoTools">
           <h3>演示控制</h3>
-          <p>仅用于页面演示。可注入模拟告警以检查状态、告警和日志的联动效果；接入实机后此区域不会显示。</p>
+          <p>仅用于页面演示。修改后点击“应用状态参数”即可同步到状态页；告警通过下方按钮注入。接入实机后此区域不会显示。</p>
+          <div class="demo-section-title">运行与运动</div>
+          <div class="demo-form-grid">
+            <label class="demo-field">当前位置<input id="demoCurrentPosition" value="X1.23 Y2.34 Z0.56"></label>
+            <label class="demo-field">目标点<input id="demoTargetPosition" value="X5.00 Y3.00 Z1.20"></label>
+            <label class="demo-field">速度<input id="demoCurrentSpeed" value="0.45 m/s"></label>
+            <label class="demo-field">TCP<input id="demoTcpPosition" value="X1.23 Y2.34"></label>
+            <label class="demo-field">运行时长<input id="demoUptime" value="2h23m"></label>
+            <label class="demo-field">剩余续航（分钟）<input id="demoRemainingTime" type="number" value="42"></label>
+            <label class="demo-field">负载（kg）<input id="demoPayload" type="number" step="0.1" value="2.3"></label>
+            <label class="demo-field">夹持力（N）<input id="demoGripForce" type="number" step="0.1" value="12.5"></label>
+            <label class="demo-field">运行模式<select id="demoOperationMode"><option selected>自动</option><option>手动</option></select></label>
+            <label class="demo-field">IP 地址<input id="demoNetworkIp" value="192.168.1.10"></label>
+          </div>
+          <div class="demo-section-title">关节角度（°）</div>
+          <div class="demo-form-grid">
+            <label class="demo-field">J1<input id="demoJoint1" type="number" value="15"></label>
+            <label class="demo-field">J2<input id="demoJoint2" type="number" value="23"></label>
+            <label class="demo-field">J3<input id="demoJoint3" type="number" value="-8"></label>
+            <label class="demo-field">J4<input id="demoJoint4" type="number" value="42"></label>
+            <label class="demo-field">J5<input id="demoJoint5" type="number" value="11"></label>
+            <label class="demo-field">J6<input id="demoJoint6" type="number" value="5"></label>
+          </div>
+          <div class="demo-section-title">电池</div>
+          <div class="demo-form-grid">
+            <label class="demo-field">电量（%）<input id="demoBatteryPercent" type="number" min="0" max="100" value="85"></label>
+            <label class="demo-field">电压（V）<input id="demoBatteryVoltage" type="number" step="0.1" value="14.8"></label>
+            <label class="demo-field">电流（A）<input id="demoBatteryCurrent" type="number" step="0.1" value="3.2"></label>
+            <label class="demo-field">温度（℃）<input id="demoBatteryTemperature" type="number" value="28"></label>
+            <label class="demo-field">单体电压（V）<input id="demoCellVoltage" type="number" step="0.01" value="3.70"></label>
+            <label class="demo-field">充电状态<select id="demoChargeStatus"><option selected>充电中</option><option>未充电</option><option>已充满</option></select></label>
+            <label class="demo-field">充电循环<input id="demoChargeCycles" type="number" min="0" value="12"></label>
+          </div>
+          <div class="demo-section-title">设备连接状态</div>
+          <div class="demo-form-grid">
+            <label class="sensor-toggle"><input data-demo-sensor="lidar" type="checkbox" checked> 激光雷达正常</label>
+            <label class="sensor-toggle"><input data-demo-sensor="depthCamera" type="checkbox" checked> 深度相机正常</label>
+            <label class="sensor-toggle"><input data-demo-sensor="forceSensor" type="checkbox" checked> 六维力正常</label>
+            <label class="sensor-toggle"><input data-demo-sensor="bumper" type="checkbox" checked> 碰撞条正常</label>
+            <label class="sensor-toggle"><input data-demo-sensor="camera" type="checkbox" checked> 摄像头正常</label>
+            <label class="sensor-toggle"><input data-demo-sensor="network" type="checkbox" checked> 网络正常</label>
+          </div>
           <div class="tool-actions">
+            <button class="btn btn-primary" onclick="applyDemoStatus()">应用状态参数</button>
+            <button class="btn" onclick="resetDemoStatus()">重置状态参数</button>
             <button class="btn btn-danger" onclick="addDemoAlert('critical')">注入严重故障</button>
             <button class="btn btn-primary" onclick="addDemoAlert('warning')">注入警告</button>
             <button class="btn" onclick="clearDemoAlerts()">清空演示告警</button>
@@ -627,11 +674,13 @@
     document.getElementById('alertHeaderCount').textContent = count;
     document.getElementById('alertBanner').style.display = count ? 'flex' : 'none';
 
-    // Fallback sensor indicators must not be inferred from unrelated alarms.
+    // In demo mode, sensor switches control the fallback indicators directly.
     // Live data updates these indicators through applySnapshot().
     var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
+    var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
     sensors.forEach(function(dot, i) {
-      dot.className = 'sensor-dot green';
+      var healthy = demoSensorState[sensorNames[i]] !== false;
+      dot.className = 'sensor-dot ' + (healthy ? 'green' : 'red');
     });
     refreshOverallHealthFromAlarms();
   }
@@ -657,7 +706,8 @@
   function refreshOverallHealthFromAlarms() {
     var hasCritical = alertData.some(function(item) { return item.severity === 'critical'; });
     var hasWarning = alertData.some(function(item) { return item.severity === 'warning'; });
-    setOverallHealth(hasCritical ? 'critical' : hasWarning ? 'warning' : 'normal');
+    var hasDeviceFault = Object.keys(demoSensorState).some(function(key) { return demoSensorState[key] === false; });
+    setOverallHealth(hasCritical || hasDeviceFault ? 'critical' : hasWarning ? 'warning' : 'normal');
   }
 
   // ==================== TAB SWITCHING ====================
@@ -742,6 +792,7 @@
       values: [45, 52, 68, 85, 110, 95, 130, 145, 160, 140, 120, 155, 145, 135, 125, 115, 105, 95, 90, 85]
     }
   ];
+  var demoSensorState = { lidar: true, depthCamera: true, forceSensor: true, bumper: true, camera: true, network: true };
   var currentAlertIndex = 0;
 
   function updateAlertPageTime() {
@@ -944,6 +995,52 @@
     renderAlertList();
     showNoActiveAlerts();
     addLog('info', '演示控制', '已清空全部演示告警', '演示控制');
+  }
+
+  function demoValue(id) { return document.getElementById(id).value.trim(); }
+
+  function applyDemoStatus() {
+    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    setText('currentPosition', demoValue('demoCurrentPosition'));
+    setText('targetPosition', demoValue('demoTargetPosition'));
+    setText('currentSpeed', demoValue('demoCurrentSpeed'));
+    setText('tcpPosition', demoValue('demoTcpPosition'));
+    setText('uptime', demoValue('demoUptime'));
+    setText('remainingTime', demoValue('demoRemainingTime') + 'm');
+    setText('payload', demoValue('demoPayload') + 'kg');
+    setText('gripForce', demoValue('demoGripForce') + 'N');
+    setText('operationMode', demoValue('demoOperationMode'));
+    setText('networkIp', 'IP ' + demoValue('demoNetworkIp'));
+    for (var i = 1; i <= 6; i++) setText('joint' + i, demoValue('demoJoint' + i) + '°');
+    var percent = demoValue('demoBatteryPercent');
+    setText('batteryLevel', percent + '%');
+    setText('batteryTop', percent + '%');
+    setText('batteryVoltage', demoValue('demoBatteryVoltage') + 'V');
+    setText('batteryCurrent', demoValue('demoBatteryCurrent') + 'A');
+    setText('batteryTemperature', demoValue('demoBatteryTemperature') + '°C');
+    setText('cellVoltage', demoValue('demoCellVoltage') + 'V');
+    var chargeStatus = demoValue('demoChargeStatus');
+    setText('chargeStatus', chargeStatus);
+    setText('chargeCycles', demoValue('demoChargeCycles'));
+    var chargeEl = document.getElementById('chargeStatus');
+    chargeEl.style.color = chargeStatus === '已充满' ? '#52C41A' : chargeStatus === '充电中' ? '#FADB14' : '#FFFFFF';
+    document.querySelectorAll('[data-demo-sensor]').forEach(function(input) { demoSensorState[input.dataset.demoSensor] = input.checked; });
+    updateAlertIndicators();
+    addLog('info', '演示控制', '已应用状态页面参数', '演示控制');
+  }
+
+  function resetDemoStatus() {
+    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    var defaults = {
+      demoCurrentPosition: 'X1.23 Y2.34 Z0.56', demoTargetPosition: 'X5.00 Y3.00 Z1.20', demoCurrentSpeed: '0.45 m/s', demoTcpPosition: 'X1.23 Y2.34',
+      demoUptime: '2h23m', demoRemainingTime: '42', demoPayload: '2.3', demoGripForce: '12.5', demoOperationMode: '自动', demoNetworkIp: '192.168.1.10',
+      demoJoint1: '15', demoJoint2: '23', demoJoint3: '-8', demoJoint4: '42', demoJoint5: '11', demoJoint6: '5',
+      demoBatteryPercent: '85', demoBatteryVoltage: '14.8', demoBatteryCurrent: '3.2', demoBatteryTemperature: '28', demoCellVoltage: '3.70', demoChargeStatus: '充电中', demoChargeCycles: '12'
+    };
+    Object.keys(defaults).forEach(function(id) { document.getElementById(id).value = defaults[id]; });
+    Object.keys(demoSensorState).forEach(function(key) { demoSensorState[key] = true; });
+    document.querySelectorAll('[data-demo-sensor]').forEach(function(input) { input.checked = true; });
+    applyDemoStatus();
   }
 
   // ==================== SUMMARY DATA & RENDER ====================
