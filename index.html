@@ -293,7 +293,7 @@
   .load-pct.danger { color: #FF4D4F; }
 
   /* ========== LOGS & SAFETY ========== */
-  .log-page { height: 492px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .log-page, .tool-page { height: 492px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
   .page-title { height: 24px; display:flex; align-items:center; justify-content:space-between; font-size:15px; font-weight:600; }
   .page-title span { font-size:11px; color:#AAAAAA; font-weight:400; }
   .log-list { flex:1; overflow-y:auto; border:1px solid #333333; border-radius:4px; background:#1E1E1E; }
@@ -302,6 +302,8 @@
   .log-tag { padding:3px 6px; border-radius:3px; text-align:center; font-size:10px; font-weight:600; }
   .log-tag.info { color:#1890FF; background:rgba(24,144,255,.12); }.log-tag.warn { color:#FADB14; background:rgba(250,219,20,.12); }.log-tag.fault { color:#FF4D4F; background:rgba(255,77,79,.12); }
   .log-export { height:44px; flex:0 0 auto; }
+  .tool-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed #444; border-radius:6px; background:#161616; color:#AAAAAA; }
+  .tool-empty .tool-icon { font-size:34px; margin-bottom:12px; }.tool-empty h3 { font-size:16px; color:#FFFFFF; margin-bottom:8px; }.tool-empty p { font-size:12px; }
 </style>
 </head>
 <body>
@@ -527,6 +529,16 @@
       <button class="btn btn-primary log-export" onclick="exportLogs()">&#x2B07; 导出诊断日志</button>
     </div>
 
+    <!-- Tab: 工具（扩展入口） -->
+    <div class="tab-content tool-page" id="tab-tools" style="display:none;">
+      <div class="page-title">工具 <span>辅助功能与本机设置</span></div>
+      <div class="tool-empty">
+        <div class="tool-icon">&#x2699;&#xFE0F;</div>
+        <h3>扩展工具</h3>
+        <p>屏幕设置、告警偏好和维护辅助功能将在此接入</p>
+      </div>
+    </div>
+
   </div><!-- /main-content -->
 
   <!-- ========== BOTTOM NAV ========== -->
@@ -542,6 +554,9 @@
     </button>
     <button class="nav-tab" data-tab="detail" onclick="switchTab('detail', this)">
       &#x1F4CB; 作业总结
+    </button>
+    <button class="nav-tab" data-tab="tools" onclick="switchTab('tools', this)">
+      &#x2699;&#xFE0F; 工具
     </button>
   </div>
 
