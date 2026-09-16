@@ -615,27 +615,31 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
   }
 
   function setText(id, value) { var el = document.getElementById(id); if (el && value !== undefined && value !== null) el.textContent = value; }
+  function displayValue(value, suffix) {
+    if (value === undefined || value === null || value === '') return '--';
+    return String(value) + (suffix || '');
+  }
 
   function applySnapshot(data) {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     data = normalizeSnapshot(data);
     var health = data.health || {};
     var motion = data.motion || {}, battery = data.battery || {};
-    setText('robotModel', data.robotModel || (data.identity && data.identity.model));
-    setText('currentPosition', motion.position); setText('currentSpeed', motion.speed); setText('targetPosition', motion.target); setText('tcpPosition', motion.tcp);
-    setText('uptime', data.uptime); setText('remainingTime', battery.remainingMinutes !== undefined ? battery.remainingMinutes + 'm' : undefined);
-    setText('batteryLevel', battery.percent !== undefined ? battery.percent + '%' : undefined); setText('batteryTop', battery.percent !== undefined ? battery.percent + '%' : undefined);
-    setText('batteryVoltage', battery.voltage !== undefined ? battery.voltage + 'V' : undefined); setText('batteryCurrent', battery.current !== undefined ? battery.current + 'A' : undefined);
-    setText('batteryTemperature', battery.temperature !== undefined ? battery.temperature + '°C' : undefined); setText('cellVoltage', battery.cellVoltage !== undefined ? battery.cellVoltage + 'V' : undefined); setText('chargeStatus', battery.chargeStatus); setText('chargeCycles', battery.cycles);
+    setText('robotModel', displayValue(data.robotModel || (data.identity && data.identity.model)));
+    setText('currentPosition', displayValue(motion.position)); setText('currentSpeed', displayValue(motion.speed)); setText('targetPosition', displayValue(motion.target)); setText('tcpPosition', displayValue(motion.tcp));
+    setText('uptime', displayValue(data.uptime)); setText('remainingTime', displayValue(battery.remainingMinutes, 'm'));
+    setText('batteryLevel', displayValue(battery.percent, '%')); setText('batteryTop', displayValue(battery.percent, '%'));
+    setText('batteryVoltage', displayValue(battery.voltage, 'V')); setText('batteryCurrent', displayValue(battery.current, 'A'));
+    setText('batteryTemperature', displayValue(battery.temperature, '°C')); setText('cellVoltage', displayValue(battery.cellVoltage, 'V')); setText('chargeStatus', displayValue(battery.chargeStatus)); setText('chargeCycles', displayValue(battery.cycles));
     var joints = motion.joints || data.joints || [];
-    joints.slice(0, 6).forEach(function(value, index) { setText('joint' + (index + 1), typeof value === 'number' ? value.toFixed(1) + '°' : value); });
-    setText('payload', data.payloadKg !== undefined ? data.payloadKg + 'kg' : undefined);
-    setText('gripForce', data.gripForceN !== undefined ? data.gripForceN + 'N' : undefined);
-    setText('operationMode', data.operationMode);
-    setText('networkIp', data.network && data.network.ip ? 'IP ' + data.network.ip : undefined);
-    setText('alertCount', health.alertCount); setText('alertBannerCount', health.alertCount);
+    for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(1) + '°' : displayValue(jointValue)); }
+    setText('payload', displayValue(data.payloadKg, 'kg'));
+    setText('gripForce', displayValue(data.gripForceN, 'N'));
+    setText('operationMode', displayValue(data.operationMode));
+    setText('networkIp', data.network && data.network.ip ? 'IP ' + data.network.ip : 'IP --');
+    setText('alertCount', displayValue(health.alertCount)); setText('alertBannerCount', displayValue(health.alertCount));
     var sensorFault = false;
-    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var isHealthy = data.sensors[sensorNames[index]] !== false; if (!isHealthy) sensorFault = true; dot.className = 'sensor-dot ' + (isHealthy ? 'green' : 'red'); }); }
+    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var sensorState = data.sensors[sensorNames[index]]; var stateClass = sensorState === true ? 'green' : (sensorState === false ? 'red' : 'unknown'); if (sensorState === false) sensorFault = true; dot.className = 'sensor-dot ' + stateClass; }); }
     var rank = { normal: 0, info: 1, warning: 2, critical: 3, emergency: 4 };
     var healthLevel = health.level || 'normal';
     if (sensorFault && (rank[healthLevel] || 0) < rank.critical) healthLevel = 'critical';

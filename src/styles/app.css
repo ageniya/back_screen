@@ -152,6 +152,7 @@
   }
   .sensor-dot.green { background: #52C41A; box-shadow: 0 0 4px #52C41A; }
   .sensor-dot.red   { background: #FF4D4F; box-shadow: 0 0 4px #FF4D4F; }
+  .sensor-dot.unknown { background: #666666; box-shadow: none; }
 
   /* --- Row 6: Action Buttons (64px) --- */
   .action-row {
