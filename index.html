@@ -423,7 +423,7 @@
           &#x2715; 故障清除
         </button>
         <button class="btn btn-stop" onclick="softEmergencyStop()">
-          &#x26D4; 软急停
+          &#x26D4; 急停
         </button>
       </div>
 
@@ -1021,7 +1021,7 @@
     request.then(function() { addLog('info', '命令', successText, '背部屏幕'); }).catch(function() { alert('命令未执行，请检查实机连接和权限。'); });
   }
 
-  function softEmergencyStop() { if (confirm('确认执行软急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求软急停'); }
+  function softEmergencyStop() { if (confirm('确认急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求急停'); }
   function exportLogs() { var text = localLogs.map(function(log) { return [log.time, log.label, log.text, log.source].join(','); }).join('\n'); var blob = new Blob(['时间,等级,内容,来源\n' + text], {type:'text/csv;charset=utf-8'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'R1-diagnostic-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }
   renderLogs();
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) {
