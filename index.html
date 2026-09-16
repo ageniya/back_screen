@@ -300,6 +300,7 @@
   .log-tag.info { color:#1890FF; background:rgba(24,144,255,.12); }.log-tag.warn { color:#FADB14; background:rgba(250,219,20,.12); }.log-tag.fault { color:#FF4D4F; background:rgba(255,77,79,.12); }
   .log-export { height:44px; flex:0 0 auto; }
   .tool-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; flex:1; }
+  .tool-grid.single { grid-template-columns:1fr; }
   .tool-card { background:#1E1E1E; border:1px solid #333333; border-radius:4px; padding:16px; display:flex; flex-direction:column; justify-content:space-between; }
   .tool-card h3 { font-size:15px; }.tool-card p { font-size:12px; color:#AAAAAA; line-height:1.6; margin-top:8px; }
   .soft-stop { background:#FF4D4F; color:#FFF; border:0; border-radius:4px; height:68px; font-size:20px; font-weight:700; cursor:pointer; }
@@ -528,12 +529,11 @@
 
     <!-- Tab: 工具 / 软急停 -->
     <div class="tab-content tool-page" id="tab-tools" style="display:none;">
-      <div class="page-title">安全工具 <span>命令将发送到机器人本地诊断服务</span></div>
-      <div class="tool-grid">
+      <div class="page-title">安全工具 <span>请在确认现场安全风险后操作</span></div>
+      <div class="tool-grid single">
         <div class="tool-card"><div><h3>软急停</h3><p>停止当前运动并保持伺服安全状态。仅在现场确认有风险时使用。</p></div><button class="soft-stop" onclick="softEmergencyStop()">&#x26D4; 软急停</button></div>
-        <div class="tool-card"><div><h3>诊断连接</h3><p id="connectionInfo">等待本地诊断服务连接</p></div><button class="btn btn-primary" onclick="requestSnapshot()">&#x21BB; 刷新状态</button></div>
       </div>
-      <div class="tool-note">软急停与故障清除均需要机器人侧权限确认和命令回执。</div>
+      <div class="tool-note">软急停需要机器人侧权限确认和命令回执。</div>
     </div>
 
   </div><!-- /main-content -->
@@ -1000,15 +1000,14 @@
     var healthLevel = health.level || 'normal';
     if (sensorFault && (rank[healthLevel] || 0) < rank.critical) healthLevel = 'critical';
     setOverallHealth(healthLevel === 'emergency' ? 'critical' : healthLevel, sensorFault && health.level === 'normal' ? '设备异常' : health.label);
-    setText('connectionInfo', '已连接 · ' + new Date().toLocaleTimeString('zh-CN', { hour12:false }) + ' 更新');
   }
 
   function requestSnapshot() {
     var request;
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getSnapshot === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getSnapshot());
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
-    else { setText('connectionInfo', '未接入实机数据，正在展示离线样例数据'); return; }
-    request.then(applySnapshot).catch(function() { setText('connectionInfo', '实机数据不可用，请检查 ROS2/服务连接'); });
+    else return;
+    request.then(applySnapshot).catch(function() { addLog('warn', '警告', '实机数据暂不可用，保留最近状态', '数据接口'); });
   }
 
   function invokeRobotCommand(path, body, successText) {
