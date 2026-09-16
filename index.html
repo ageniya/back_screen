@@ -304,6 +304,10 @@
   .log-export { height:44px; flex:0 0 auto; }
   .tool-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed #444; border-radius:6px; background:#161616; color:#AAAAAA; }
   .tool-empty .tool-icon { font-size:34px; margin-bottom:12px; }.tool-empty h3 { font-size:16px; color:#FFFFFF; margin-bottom:8px; }.tool-empty p { font-size:12px; }
+  .tool-panel { flex:1; display:grid; grid-template-columns:1.1fr .9fr; gap:12px; min-height:0; }
+  .tool-card { border:1px solid #333; border-radius:6px; background:#1E1E1E; padding:16px; }
+  .tool-card h3 { font-size:15px; color:#FFF; margin-bottom:6px; }.tool-card p { font-size:12px; color:#AAA; line-height:1.6; }
+  .tool-card .tool-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }.tool-card .btn { min-height:40px; flex:1; padding:0 12px; font-size:13px; }
 </style>
 </head>
 <body>
@@ -532,10 +536,21 @@
     <!-- Tab: 工具（扩展入口） -->
     <div class="tab-content tool-page" id="tab-tools" style="display:none;">
       <div class="page-title">工具 <span>辅助功能与本机设置</span></div>
-      <div class="tool-empty">
-        <div class="tool-icon">&#x2699;&#xFE0F;</div>
-        <h3>扩展工具</h3>
-        <p>屏幕设置、告警偏好和维护辅助功能将在此接入</p>
+      <div class="tool-panel">
+        <div class="tool-card" id="demoTools">
+          <h3>演示控制</h3>
+          <p>仅用于页面演示。可注入模拟告警以检查状态、告警和日志的联动效果；接入实机后此区域不会显示。</p>
+          <div class="tool-actions">
+            <button class="btn btn-danger" onclick="addDemoAlert('critical')">注入严重故障</button>
+            <button class="btn btn-primary" onclick="addDemoAlert('warning')">注入警告</button>
+            <button class="btn" onclick="clearDemoAlerts()">清空演示告警</button>
+          </div>
+        </div>
+        <div class="tool-empty">
+          <div class="tool-icon">&#x2699;&#xFE0F;</div>
+          <h3>扩展工具</h3>
+          <p>屏幕设置、告警偏好和维护辅助功能将在此接入</p>
+        </div>
       </div>
     </div>
 
@@ -896,6 +911,41 @@
     }
   }
 
+  function demoTime() {
+    var now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+  }
+
+  function addDemoAlert(severity) {
+    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    var isCritical = severity === 'critical';
+    var id = 'DEMO-' + Date.now();
+    var item = isCritical ? {
+      id: id, title: '演示：左臂关节温度异常', severity: 'critical', code: 'D-C' + String(alertData.length + 1).padStart(3, '0'), time: demoTime(),
+      desc: '演示数据：左臂关节温度超过安全阈值。', suggestion: '演示处理建议：停止相关动作并检查散热与传感器。', label: '实时曲线 · 演示温度 (°C)', values: [58, 61, 65, 69, 73, 77, 80, 83, 81, 79]
+    } : {
+      id: id, title: '演示：电池电量偏低', severity: 'warning', code: 'D-W' + String(alertData.length + 1).padStart(3, '0'), time: demoTime(),
+      desc: '演示数据：电池电量低于预警阈值。', suggestion: '演示处理建议：尽快返回充电点，避免电池过放。', label: '实时曲线 · 演示电量 (%)', values: [38, 34, 31, 28, 25, 22, 19, 17, 16, 15]
+    };
+    alertData.unshift(item);
+    currentAlertIndex = 0;
+    updateAlertIndicators();
+    renderAlertList();
+    selectAlert(0);
+    addLog(isCritical ? 'fault' : 'warn', isCritical ? '严重故障' : '警告', '已注入 ' + item.code + ' ' + item.title, '演示控制');
+  }
+
+  function clearDemoAlerts() {
+    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE || !alertData.length) return;
+    if (!confirm('确认清空全部演示告警？')) return;
+    alertData = [];
+    currentAlertIndex = 0;
+    updateAlertIndicators();
+    renderAlertList();
+    showNoActiveAlerts();
+    addLog('info', '演示控制', '已清空全部演示告警', '演示控制');
+  }
+
   // ==================== SUMMARY DATA & RENDER ====================
   var summaryData = {
     // 上一次结束充电时的电量 (Ah)
@@ -987,6 +1037,7 @@
   // diagnostic-system architecture.
   var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
   var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
+  if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) document.getElementById('demoTools').style.display = 'none';
   var localLogs = [
     { time: '15:42:18', type: 'fault', label: '故障', text: 'F001 左臂电机温度过高，已触发安全策略', source: '诊断引擎' },
     { time: '15:38:05', type: 'warn', label: '警告', text: 'W014 核心节点通信延迟波动', source: '网络模块' },
