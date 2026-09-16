@@ -771,7 +771,7 @@
       desc: '左臂电机温度超过安全阈值，当前温度78℃，阈值70℃。',
       suggestion: '建议立即停机检查电机散热系统，清理散热片灰尘，检查风扇是否正常工作。',
       label: '实时曲线 · 电机温度 (°C)',
-      values: [62, 63, 65, 67, 70, 72, 75, 78, 77, 76, 78, 79, 78, 77, 76, 75, 74, 73, 72, 71]
+      values: [62, 63, 65, 67, 70, 72, 75, 78, 77, 76, 78, 79, 78, 77, 76, 75, 74, 73, 72, 71], axis: { min: 50, max: 90, threshold: 70 }
     },
     {
       id: 'F002', title: '右轮编码器异常', severity: 'critical', code: 'F002',
@@ -779,7 +779,7 @@
       desc: '右轮编码器反馈信号丢失，当前脉冲数0，预期>1200。',
       suggestion: '检查编码器接线是否松动，确认供电电压正常，必要时更换编码器。',
       label: '实时曲线 · 编码器脉冲 (counts)',
-      values: [1200, 1180, 1150, 900, 600, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      values: [1200, 1180, 1150, 900, 600, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], axis: { min: 0, max: 1400, threshold: 1200 }
     },
     {
       id: 'W001', title: '电池电量偏低', severity: 'warning', code: 'W001',
@@ -787,7 +787,7 @@
       desc: '当前电池电量18%，低于警告阈值20%，建议尽快充电。',
       suggestion: '降低运行功率或返回充电站，避免电池过放导致设备停机。',
       label: '实时曲线 · 电池电量 (%)',
-      values: [35, 33, 31, 29, 27, 25, 23, 21, 19, 18, 18, 17, 17, 16, 16, 15, 15, 14, 14, 13]
+      values: [35, 33, 31, 29, 27, 25, 23, 21, 19, 18, 18, 17, 17, 16, 16, 15, 15, 14, 14, 13], axis: { min: 0, max: 100, threshold: 20 }
     },
     {
       id: 'W002', title: '通信延迟波动', severity: 'warning', code: 'W002',
@@ -795,7 +795,7 @@
       desc: '网络通信延迟波动较大，当前延迟145ms，阈值100ms。',
       suggestion: '检查网络链路质量，重启通信模块，排查附近干扰源。',
       label: '实时曲线 · 通信延迟 (ms)',
-      values: [45, 52, 68, 85, 110, 95, 130, 145, 160, 140, 120, 155, 145, 135, 125, 115, 105, 95, 90, 85]
+      values: [45, 52, 68, 85, 110, 95, 130, 145, 160, 140, 120, 155, 145, 135, 125, 115, 105, 95, 90, 85], axis: { min: 0, max: 200, threshold: 100 }
     }
   ];
   var demoSensorState = { lidar: true, depthCamera: true, forceSensor: true, bumper: true, camera: true, network: true };
@@ -852,10 +852,12 @@
     document.getElementById('detailSuggestion').textContent = item.suggestion;
     document.getElementById('chartLabel').textContent = item.label;
     renderAlertList();
-    drawAlertChart(item.values);
+    drawAlertChart(item);
   }
 
-  function drawAlertChart(values) {
+  function drawAlertChart(item) {
+    var values = item.values;
+    var axis = item.axis || {};
     var canvas = document.getElementById('alertChart');
     var ctx = canvas.getContext('2d');
     var dpr = window.devicePixelRatio || 1;
@@ -868,35 +870,50 @@
 
     ctx.clearRect(0, 0, w, h);
 
-    // Grid lines
+    var left = 42, right = 10, top = 10, bottom = 22;
+    var plotW = w - left - right, plotH = h - top - bottom;
+    var min = axis.min !== undefined ? axis.min : Math.min.apply(null, values);
+    var max = axis.max !== undefined ? axis.max : Math.max.apply(null, values);
+    if (axis.min === undefined || axis.max === undefined) {
+      var range = max - min || 1;
+      min -= range * 0.1;
+      max += range * 0.1;
+    }
+
+    // Grid lines and a fixed scale appropriate for this measurement.
     ctx.strokeStyle = '#2A2A2A';
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (var i = 0; i < 5; i++) {
-      var gy = 10 + (h - 20) * i / 4;
-      ctx.moveTo(35, gy);
-      ctx.lineTo(w - 10, gy);
+      var gy = top + plotH * i / 4;
+      ctx.moveTo(left, gy);
+      ctx.lineTo(w - right, gy);
     }
     ctx.stroke();
 
-    // Determine scale
-    var min = Math.min.apply(null, values);
-    var max = Math.max.apply(null, values);
-    var range = max - min || 1;
-    min -= range * 0.1;
-    max += range * 0.1;
+    var step = plotW / (values.length - 1);
+    var color = item.severity === 'critical' ? '#FF4D4F' : '#FADB14';
+
+    // Threshold line uses the diagnostic rule's real threshold, not the data range.
+    if (typeof axis.threshold === 'number' && axis.threshold >= min && axis.threshold <= max) {
+      var thresholdY = top + plotH - ((axis.threshold - min) / (max - min)) * plotH;
+      ctx.save();
+      ctx.strokeStyle = '#FF7875';
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(left, thresholdY); ctx.lineTo(w - right, thresholdY); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#FF7875'; ctx.font = '10px "Courier New", monospace'; ctx.textAlign = 'right';
+      ctx.fillText('阈值 ' + axis.threshold, w - right, Math.max(9, thresholdY - 3));
+      ctx.restore();
+    }
 
     // Draw line
-    var plotH = h - 28;
-    var plotW = w - 55;
-    var step = plotW / (values.length - 1);
-    var color = currentAlertIndex < 2 ? '#FF4D4F' : '#FADB14';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
     values.forEach(function(v, i) {
-      var x = 35 + i * step;
-      var y = 10 + plotH - ((v - min) / (max - min)) * plotH;
+      var x = left + i * step;
+      var y = top + plotH - ((v - min) / (max - min)) * plotH;
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -905,8 +922,8 @@
     // Draw points
     ctx.fillStyle = color;
     values.forEach(function(v, i) {
-      var x = 35 + i * step;
-      var y = 10 + plotH - ((v - min) / (max - min)) * plotH;
+      var x = left + i * step;
+      var y = top + plotH - ((v - min) / (max - min)) * plotH;
       ctx.beginPath();
       ctx.arc(x, y, 2.5, 0, Math.PI * 2);
       ctx.fill();
@@ -918,9 +935,13 @@
     ctx.textAlign = 'right';
     for (var i = 0; i < 5; i++) {
       var val = min + (max - min) * (1 - i / 4);
-      var ly = 10 + (h - 20) * i / 4 + 3;
-      ctx.fillText(val.toFixed(0), 30, ly);
+      var ly = top + plotH * i / 4 + 3;
+      ctx.fillText(Number.isInteger(val) ? val : val.toFixed(1), left - 5, ly);
     }
+
+    ctx.textAlign = 'left'; ctx.fillText('-' + (values.length - 1) + 's', left, h - 5);
+    ctx.textAlign = 'center'; ctx.fillText('-' + Math.floor((values.length - 1) / 2) + 's', left + plotW / 2, h - 5);
+    ctx.textAlign = 'right'; ctx.fillText('当前', w - right, h - 5);
   }
 
   function investigateAlert() {
@@ -975,16 +996,16 @@
 
   var demoAlertTemplates = {
     critical: [
-      { title: '演示：左臂关节温度异常', code: 'D-C001', desc: '演示数据：左臂关节温度超过安全阈值。', suggestion: '演示处理建议：停止相关动作并检查散热与传感器。', label: '实时曲线 · 演示温度 (°C)', values: [58, 61, 65, 69, 73, 77, 80, 83, 81, 79] },
-      { title: '演示：右轮编码器信号丢失', code: 'D-C002', desc: '演示数据：右轮编码器连续丢失反馈脉冲。', suggestion: '演示处理建议：检查编码器接线、供电及机械联轴器。', label: '实时曲线 · 演示编码器脉冲 (counts)', values: [1220, 1205, 1180, 960, 650, 330, 80, 0, 0, 0] },
-      { title: '演示：电池电压低于保护阈值', code: 'D-C003', desc: '演示数据：电池电压低于安全保护阈值，存在掉电风险。', suggestion: '演示处理建议：停止高功耗作业并立即连接充电设备。', label: '实时曲线 · 演示电池电压 (V)', values: [25.1, 24.7, 24.3, 23.9, 23.5, 23.1, 22.8, 22.6, 22.5, 22.4] },
-      { title: '演示：激光雷达通信中断', code: 'D-C004', desc: '演示数据：激光雷达数据流超过 3 秒未更新。', suggestion: '演示处理建议：检查雷达供电、网线与通信进程。', label: '实时曲线 · 演示雷达帧率 (Hz)', values: [10, 10, 10, 9, 7, 4, 1, 0, 0, 0] }
+      { title: '演示：左臂关节温度异常', code: 'D-C001', desc: '演示数据：左臂关节温度超过安全阈值。', suggestion: '演示处理建议：停止相关动作并检查散热与传感器。', label: '实时曲线 · 演示温度 (°C)', values: [58, 61, 65, 69, 73, 77, 80, 83, 81, 79], axis: { min: 50, max: 90, threshold: 70 } },
+      { title: '演示：右轮编码器信号丢失', code: 'D-C002', desc: '演示数据：右轮编码器连续丢失反馈脉冲。', suggestion: '演示处理建议：检查编码器接线、供电及机械联轴器。', label: '实时曲线 · 演示编码器脉冲 (counts)', values: [1220, 1205, 1180, 960, 650, 330, 80, 0, 0, 0], axis: { min: 0, max: 1400, threshold: 1200 } },
+      { title: '演示：电池电压低于保护阈值', code: 'D-C003', desc: '演示数据：电池电压低于安全保护阈值，存在掉电风险。', suggestion: '演示处理建议：停止高功耗作业并立即连接充电设备。', label: '实时曲线 · 演示电池电压 (V)', values: [25.1, 24.7, 24.3, 23.9, 23.5, 23.1, 22.8, 22.6, 22.5, 22.4], axis: { min: 20, max: 26, threshold: 23 } },
+      { title: '演示：激光雷达通信中断', code: 'D-C004', desc: '演示数据：激光雷达数据流超过 3 秒未更新。', suggestion: '演示处理建议：检查雷达供电、网线与通信进程。', label: '实时曲线 · 演示雷达帧率 (Hz)', values: [10, 10, 10, 9, 7, 4, 1, 0, 0, 0], axis: { min: 0, max: 12, threshold: 1 } }
     ],
     warning: [
-      { title: '演示：电池电量偏低', code: 'D-W001', desc: '演示数据：电池电量低于预警阈值。', suggestion: '演示处理建议：尽快返回充电点，避免电池过放。', label: '实时曲线 · 演示电量 (%)', values: [38, 34, 31, 28, 25, 22, 19, 17, 16, 15] },
-      { title: '演示：网络通信延迟升高', code: 'D-W002', desc: '演示数据：与核心节点的通信延迟持续高于预警阈值。', suggestion: '演示处理建议：检查网络信号、交换机和附近干扰源。', label: '实时曲线 · 演示通信延迟 (ms)', values: [42, 48, 55, 68, 74, 96, 118, 135, 121, 110] },
-      { title: '演示：摄像头帧率波动', code: 'D-W003', desc: '演示数据：摄像头帧率短时下降，视觉任务可能受影响。', suggestion: '演示处理建议：检查带宽占用、相机接口和镜头遮挡。', label: '实时曲线 · 演示摄像头帧率 (fps)', values: [30, 30, 29, 27, 23, 19, 22, 25, 21, 24] },
-      { title: '演示：碰撞条信号抖动', code: 'D-W004', desc: '演示数据：碰撞条输入在短时间内多次切换。', suggestion: '演示处理建议：检查防撞条固定状态、线束与灵敏度配置。', label: '实时曲线 · 演示碰撞条信号', values: [0, 0, 1, 0, 1, 1, 0, 1, 0, 0] }
+      { title: '演示：电池电量偏低', code: 'D-W001', desc: '演示数据：电池电量低于预警阈值。', suggestion: '演示处理建议：尽快返回充电点，避免电池过放。', label: '实时曲线 · 演示电量 (%)', values: [38, 34, 31, 28, 25, 22, 19, 17, 16, 15], axis: { min: 0, max: 100, threshold: 20 } },
+      { title: '演示：网络通信延迟升高', code: 'D-W002', desc: '演示数据：与核心节点的通信延迟持续高于预警阈值。', suggestion: '演示处理建议：检查网络信号、交换机和附近干扰源。', label: '实时曲线 · 演示通信延迟 (ms)', values: [42, 48, 55, 68, 74, 96, 118, 135, 121, 110], axis: { min: 0, max: 200, threshold: 100 } },
+      { title: '演示：摄像头帧率波动', code: 'D-W003', desc: '演示数据：摄像头帧率短时下降，视觉任务可能受影响。', suggestion: '演示处理建议：检查带宽占用、相机接口和镜头遮挡。', label: '实时曲线 · 演示摄像头帧率 (fps)', values: [30, 30, 29, 27, 23, 19, 22, 25, 21, 24], axis: { min: 0, max: 35, threshold: 25 } },
+      { title: '演示：碰撞条信号抖动', code: 'D-W004', desc: '演示数据：碰撞条输入在短时间内多次切换。', suggestion: '演示处理建议：检查防撞条固定状态、线束与灵敏度配置。', label: '实时曲线 · 演示碰撞条信号', values: [0, 0, 1, 0, 1, 1, 0, 1, 0, 0], axis: { min: 0, max: 1 } }
     ]
   };
   var lastDemoTemplateIndex = { critical: -1, warning: -1 };
@@ -1157,7 +1178,7 @@
     updateAlertPageTime();
     renderAlertList();
     setTimeout(function() {
-      if (alertData.length) drawAlertChart(alertData[currentAlertIndex].values);
+      if (alertData.length) drawAlertChart(alertData[currentAlertIndex]);
       else showNoActiveAlerts();
     }, 50);
   }
