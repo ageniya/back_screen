@@ -564,6 +564,19 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
   // diagnostic-system architecture.
   var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
   var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
+  function setDataSourceState(state) {
+    var el = document.getElementById('dataSource');
+    if (!el) return;
+    var labels = {
+      demo: '演示数据',
+      connecting: '接口连接中',
+      connected: ROBOT_DATA_ADAPTER ? '本地数据' : '后端数据',
+      offline: '接口离线'
+    };
+    el.className = 'data-source ' + state;
+    el.textContent = labels[state];
+  }
+  setDataSourceState(ROBOT_DATA_ADAPTER || ROBOT_API_BASE ? 'connecting' : 'demo');
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) document.getElementById('demoEntry').style.display = 'none';
   var localLogs = [
     { time: '15:42:18', type: 'fault', label: '故障', text: 'F001 左臂电机温度过高，已触发安全策略', source: '诊断引擎' },
@@ -634,7 +647,7 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getSnapshot === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getSnapshot());
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
     else return;
-    request.then(applySnapshot).catch(function() { addLog('warn', '警告', '实机数据暂不可用，保留最近状态', '数据接口'); });
+    request.then(function(data) { applySnapshot(data); setDataSourceState('connected'); }).catch(function() { setDataSourceState('offline'); addLog('warn', '警告', '实机数据暂不可用，保留最近状态', '数据接口'); });
   }
 
   function applyAlarms(data) {
