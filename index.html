@@ -539,10 +539,15 @@
 
     <!-- Tab: 工具（扩展入口） -->
     <div class="tab-content tool-page" id="tab-tools" style="display:none;">
-      <div class="page-title">工具 <span>辅助功能与本机设置</span></div>
+      <div class="page-title" id="toolsPageTitle">工具 <span>辅助功能与本机设置</span></div>
       <div class="tool-panel">
-        <div class="tool-card" id="demoTools">
+        <div class="tool-card" id="demoEntry">
           <h3>演示控制</h3>
+          <p>用于修改页面演示数据、注入告警并验证界面联动效果。</p>
+          <div class="tool-actions"><button class="btn btn-primary" onclick="openDemoControl()">进入演示控制 &#x2192;</button></div>
+        </div>
+        <div class="tool-card" id="demoTools" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><h3 style="margin:0;">演示控制</h3><button class="btn" style="flex:0 0 auto;min-height:32px;" onclick="closeDemoControl()">&#x2190; 返回工具</button></div>
           <p>仅用于页面演示。修改后点击“应用状态参数”即可同步到状态页；告警通过下方按钮注入。接入实机后此区域不会显示。</p>
           <div class="demo-section-title">运行与运动</div>
           <div class="demo-form-grid">
@@ -593,7 +598,7 @@
             <button class="btn" onclick="clearDemoAlerts()">清空演示告警</button>
           </div>
         </div>
-        <div class="tool-empty">
+        <div class="tool-empty" id="toolsPlaceholder">
           <div class="tool-icon">&#x2699;&#xFE0F;</div>
           <h3>扩展工具</h3>
           <p>屏幕设置、告警偏好和维护辅助功能将在此接入</p>
@@ -999,6 +1004,21 @@
 
   function demoValue(id) { return document.getElementById(id).value.trim(); }
 
+  function openDemoControl() {
+    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    document.getElementById('demoEntry').style.display = 'none';
+    document.getElementById('toolsPlaceholder').style.display = 'none';
+    document.getElementById('demoTools').style.display = 'block';
+    document.getElementById('toolsPageTitle').innerHTML = '演示控制 <span>仅用于开发与演示</span>';
+  }
+
+  function closeDemoControl() {
+    document.getElementById('demoTools').style.display = 'none';
+    document.getElementById('demoEntry').style.display = 'block';
+    document.getElementById('toolsPlaceholder').style.display = 'flex';
+    document.getElementById('toolsPageTitle').innerHTML = '工具 <span>辅助功能与本机设置</span>';
+  }
+
   function applyDemoStatus() {
     if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
     setText('currentPosition', demoValue('demoCurrentPosition'));
@@ -1134,7 +1154,7 @@
   // diagnostic-system architecture.
   var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
   var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
-  if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) document.getElementById('demoTools').style.display = 'none';
+  if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) document.getElementById('demoEntry').style.display = 'none';
   var localLogs = [
     { time: '15:42:18', type: 'fault', label: '故障', text: 'F001 左臂电机温度过高，已触发安全策略', source: '诊断引擎' },
     { time: '15:38:05', type: 'warn', label: '警告', text: 'W014 核心节点通信延迟波动', source: '网络模块' },
