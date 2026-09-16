@@ -6,6 +6,7 @@ src/styles/app.css      工业屏视觉样式
 src/scripts/app.js      页面状态、交互、渲染和图表逻辑
 src/data/               演示数据与默认配置（逐步迁移）
 src/api/                实机数据/命令适配层（逐步接入）
+public/runtime-config.js 部署时配置实机 API 地址
 docs/                   架构和接入说明
 ```
 

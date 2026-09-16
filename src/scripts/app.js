@@ -1,3 +1,5 @@
+import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.js';
+
 // ==================== REAL-TIME CLOCK ====================
   function updateClock() {
     var now = new Date();
@@ -576,8 +578,9 @@
   }
 
   function applyWorkSummary(data) {
-    summaryData = Object.assign({}, summaryData, data || {});
-    if (Array.isArray(data && data.tasks)) summaryData.tasks = data.tasks;
+    data = normalizeWorkSummary(data);
+    summaryData = Object.assign({}, summaryData, data);
+    if (Array.isArray(data.tasks)) summaryData.tasks = data.tasks;
     renderSummary();
   }
 
@@ -599,6 +602,7 @@
 
   function applySnapshot(data) {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
+    data = normalizeSnapshot(data);
     var health = data.health || {};
     var motion = data.motion || {}, battery = data.battery || {};
     setText('robotModel', data.robotModel || (data.identity && data.identity.model));
