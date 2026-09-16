@@ -428,7 +428,7 @@
       </div>
 
       <!-- Row 7: Alert Banner -->
-      <div class="alert-banner" onclick="goToAlerts()">
+      <div class="alert-banner" id="alertBanner" onclick="goToAlerts()">
         &#x26A0;&#xFE0F; 当前有 <strong style="margin:0 4px;" id="alertBannerCount">4</strong> 条未处理告警，点击查看 &rarr;
       </div>
 
@@ -610,6 +610,7 @@
     document.getElementById('alertCount').textContent = count;
     document.getElementById('alertBannerCount').textContent = count;
     document.getElementById('alertHeaderCount').textContent = count;
+    document.getElementById('alertBanner').style.display = count ? 'flex' : 'none';
 
     // Fallback sensor indicators must not be inferred from unrelated alarms.
     // Live data updates these indicators through applySnapshot().
