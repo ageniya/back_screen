@@ -128,7 +128,34 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
 
   // ==================== FAULT CLEAR BUTTON ====================
   function clearFault() {
-    if (confirm('确认清除已恢复的故障？\n\n未恢复的故障不会被清除。')) invokeRobotCommand('/alarms/clear-recovered', {}, '已请求清除已恢复故障');
+    if (!alertData.length) {
+      alert('当前没有可清除的告警。');
+      return;
+    }
+    if (!confirm('确认发送故障清除请求？\n\n实机运行时，仍在触发的故障不会被清除。')) return;
+
+    var btn = document.getElementById('btnFaultClear');
+    if (!btn || btn.disabled) return;
+    var originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '&#x23F3; 清除中...';
+
+    invokeRobotCommand('/alarms/clear-recovered', {}, '已请求清除已恢复故障').then(function(success) {
+      if (!success) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        return;
+      }
+      // Ask the source again instead of pretending that the client cleared a
+      // fault.  The server / real diagnosis engine remains authoritative.
+      requestAlarms();
+      requestSnapshot();
+      btn.innerHTML = '&#x2705; 已清除';
+      setTimeout(function() {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }, 1800);
+    });
   }
 
   // ==================== ALERT BANNER CLICK ====================
