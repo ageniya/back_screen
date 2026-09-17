@@ -624,7 +624,7 @@ function isDemoMode() {
     var el = document.getElementById('dataSource');
     if (!el) return;
     var labels = {
-      demo: '演示数据',
+      demo: ROBOT_API_BASE ? '后端模拟数据' : '本地演示数据',
       connecting: '接口连接中',
       waiting: '等待实机数据',
       connected: ROBOT_DATA_ADAPTER ? '本地数据' : '实机数据',
