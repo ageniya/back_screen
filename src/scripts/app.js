@@ -1,5 +1,10 @@
 import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.js';
 
+// In API mode the server is the single source of truth for overall health.
+// These are defined before any demo initialisation runs.
+var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
+var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
+
 // ==================== REAL-TIME CLOCK ====================
   function updateClock() {
     var now = new Date();
@@ -49,16 +54,15 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
     document.getElementById('alertHeaderCount').textContent = count;
     document.getElementById('alertBanner').style.display = count ? 'flex' : 'none';
 
-    // Only demo mode uses the editable sensor switches. Live state comes from
-    // applySnapshot() and must never be overwritten by a local alert refresh.
-    if (!ROBOT_DATA_ADAPTER && !ROBOT_API_BASE) {
-      var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
-      var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
-      sensors.forEach(function(dot, i) {
-        var healthy = demoSensorState[sensorNames[i]] !== false;
-        dot.className = 'sensor-dot ' + (healthy ? 'green' : 'red');
-      });
-    }
+    // In API mode snapshot.health and snapshot.sensors are authoritative.
+    // Do not let initial demo data overwrite the state received from server.
+    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
+    var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
+    sensors.forEach(function(dot, i) {
+      var healthy = demoSensorState[sensorNames[i]] !== false;
+      dot.className = 'sensor-dot ' + (healthy ? 'green' : 'red');
+    });
     refreshOverallHealthFromAlarms();
   }
 
@@ -562,8 +566,6 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
   // The deployment may inject window.ROBOT_DATA_ADAPTER to obtain actual data
   // from the existing ROS2 SDK/bridge. HTTP is only a fallback, not a required
   // diagnostic-system architecture.
-  var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
-  var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   function setDataSourceState(state) {
     var el = document.getElementById('dataSource');
     if (!el) return;
