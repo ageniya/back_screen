@@ -4,6 +4,13 @@ import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.j
 // These are defined before any demo initialisation runs.
 var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
 var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
+// When an explicitly configured backend is unavailable, keep the page useful
+// for demos without pretending that the backend is connected.
+var DEMO_FALLBACK_ACTIVE = !ROBOT_DATA_ADAPTER && !ROBOT_API_BASE;
+
+function isDemoMode() {
+  return !ROBOT_DATA_ADAPTER && (!ROBOT_API_BASE || DEMO_FALLBACK_ACTIVE);
+}
 
 // ==================== REAL-TIME CLOCK ====================
   function updateClock() {
@@ -56,7 +63,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
 
     // In API mode snapshot.health and snapshot.sensors are authoritative.
     // Do not let initial demo data overwrite the state received from server.
-    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    if (!isDemoMode()) return;
     var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
     var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
     sensors.forEach(function(dot, i) {
@@ -119,7 +126,12 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
     setTimeout(function() {
       btn.disabled = false;
       btn.innerHTML = '&#x2705; 诊断完成';
-      invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断');
+      if (isDemoMode()) {
+        addDemoAlert('warning');
+        addLog('info', '诊断', '演示诊断已完成，并注入一条模拟告警', '演示控制');
+      } else {
+        invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断');
+      }
       setTimeout(function() {
         btn.innerHTML = '&#x1F504; 一键诊断';
       }, 2000);
@@ -139,6 +151,21 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
     var originalText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '&#x23F3; 清除中...';
+
+    if (isDemoMode()) {
+      alertData = [];
+      currentAlertIndex = 0;
+      updateAlertIndicators();
+      renderAlertList();
+      showNoActiveAlerts();
+      addLog('info', '演示控制', '已清除全部模拟告警', '演示控制');
+      btn.innerHTML = '&#x2705; 已清除';
+      setTimeout(function() {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }, 1800);
+      return;
+    }
 
     invokeRobotCommand('/alarms/clear-recovered', {}, '已请求清除已恢复故障').then(function(success) {
       if (!success) {
@@ -382,7 +409,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
     var item = alertData[currentAlertIndex];
     if (!item) return;
     if (confirm('确认恢复告警 ' + item.code + '？\n' + item.title)) {
-      if (!ROBOT_DATA_ADAPTER && !ROBOT_API_BASE) {
+      if (isDemoMode()) {
         acknowledgeAlertLocally(item.id);
         alert('演示模式：已确认恢复 ' + item.code);
         return;
@@ -414,7 +441,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   var lastDemoTemplateIndex = { critical: -1, warning: -1 };
 
   function addDemoAlert(severity) {
-    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    if (!isDemoMode()) return;
     var templates = demoAlertTemplates[severity];
     var templateIndex = Math.floor(Math.random() * templates.length);
     if (templates.length > 1 && templateIndex === lastDemoTemplateIndex[severity]) templateIndex = (templateIndex + 1) % templates.length;
@@ -432,7 +459,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   }
 
   function clearDemoAlerts() {
-    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE || !alertData.length) return;
+    if (!isDemoMode() || !alertData.length) return;
     if (!confirm('确认清空全部演示告警？')) return;
     alertData = [];
     currentAlertIndex = 0;
@@ -445,7 +472,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   function demoValue(id) { return document.getElementById(id).value.trim(); }
 
   function openDemoControl() {
-    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    if (!isDemoMode()) return;
     document.getElementById('demoEntry').style.display = 'none';
     document.getElementById('toolsPlaceholder').style.display = 'none';
     document.getElementById('demoTools').style.display = 'block';
@@ -460,7 +487,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   }
 
   function applyDemoStatus() {
-    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    if (!isDemoMode()) return;
     setText('robotModel', demoValue('demoRobotModel'));
     setText('currentPosition', demoValue('demoCurrentPosition'));
     setText('targetPosition', demoValue('demoTargetPosition'));
@@ -491,7 +518,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   }
 
   function resetDemoStatus() {
-    if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) return;
+    if (!isDemoMode()) return;
     var defaults = {
       demoRobotModel: 'R1', demoCurrentPosition: 'X1.23 Y2.34 Z0.56', demoTargetPosition: 'X5.00 Y3.00 Z1.20', demoCurrentSpeed: '0.45 m/s', demoTcpPosition: 'X1.23 Y2.34',
       demoUptime: '2h23m', demoRemainingTime: '42', demoPayload: '2.3', demoGripForce: '12.5', demoOperationMode: '自动', demoNetworkIp: '192.168.1.10',
@@ -606,6 +633,25 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
     el.className = 'data-source ' + state;
     el.textContent = labels[state] || labels.demo;
   }
+
+  function activateDemoFallback() {
+    if (ROBOT_DATA_ADAPTER) return;
+    DEMO_FALLBACK_ACTIVE = true;
+    var entry = document.getElementById('demoEntry');
+    if (entry) entry.style.display = 'block';
+  }
+
+  function deactivateDemoFallback() {
+    if (!ROBOT_API_BASE || ROBOT_DATA_ADAPTER) return;
+    DEMO_FALLBACK_ACTIVE = false;
+    var entry = document.getElementById('demoEntry');
+    var tools = document.getElementById('demoTools');
+    var placeholder = document.getElementById('toolsPlaceholder');
+    if (entry) entry.style.display = 'none';
+    if (tools) tools.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'flex';
+  }
+
   setDataSourceState(ROBOT_DATA_ADAPTER || ROBOT_API_BASE ? 'connecting' : 'demo');
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) document.getElementById('demoEntry').style.display = 'none';
   var localLogs = [
@@ -686,7 +732,11 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
       // HTTP mode is decided by /healthz. A successful snapshot can still be
       // mock data or a ROS adapter that has not received robot messages yet.
       if (ROBOT_DATA_ADAPTER) setDataSourceState('connected');
-    }).catch(function() { setDataSourceState('offline'); addLog('warn', '警告', '实机数据暂不可用，保留最近状态', '数据接口'); });
+    }).catch(function() {
+      activateDemoFallback();
+      setDataSourceState('offline');
+      addLog('warn', '警告', '实机数据暂不可用，已启用本地演示控制', '数据接口');
+    });
   }
 
   function backendHealthUrl() {
@@ -699,6 +749,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
       if (!res.ok) throw new Error(res.status);
       return res.json();
     }).then(function(status) {
+      deactivateDemoFallback();
       if (status.telemetryMode === 'ros' && status.dataReady === true) {
         setDataSourceState('connected');
       } else if (status.telemetryMode === 'ros') {
@@ -709,6 +760,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
         setDataSourceState('connecting');
       }
     }).catch(function() {
+      activateDemoFallback();
       setDataSourceState('offline');
     });
   }
@@ -728,7 +780,10 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getAlarms === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getAlarms());
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/alarms').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
     else return;
-    request.then(applyAlarms).catch(function() { addLog('warn', '警告', '未获取到实时告警，保留最近数据', '数据接口'); });
+    request.then(applyAlarms).catch(function() {
+      activateDemoFallback();
+      addLog('warn', '警告', '未获取到实时告警，已启用本地演示控制', '数据接口');
+    });
   }
 
   function invokeRobotCommand(path, body, successText) {
