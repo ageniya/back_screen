@@ -638,7 +638,10 @@ function isDemoMode() {
     if (ROBOT_DATA_ADAPTER) return;
     DEMO_FALLBACK_ACTIVE = true;
     var entry = document.getElementById('demoEntry');
-    if (entry) entry.style.display = 'block';
+    var tools = document.getElementById('demoTools');
+    // Health checks continue while the backend is offline. Do not make the
+    // entry card reappear after the user has already opened the demo panel.
+    if (entry && (!tools || tools.style.display === 'none')) entry.style.display = 'block';
   }
 
   function deactivateDemoFallback() {
