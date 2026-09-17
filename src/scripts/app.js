@@ -599,11 +599,12 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
     var labels = {
       demo: '演示数据',
       connecting: '接口连接中',
-      connected: ROBOT_DATA_ADAPTER ? '本地数据' : '后端数据',
+      waiting: '等待实机数据',
+      connected: ROBOT_DATA_ADAPTER ? '本地数据' : '实机数据',
       offline: '接口离线'
     };
     el.className = 'data-source ' + state;
-    el.textContent = labels[state];
+    el.textContent = labels[state] || labels.demo;
   }
   setDataSourceState(ROBOT_DATA_ADAPTER || ROBOT_API_BASE ? 'connecting' : 'demo');
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) document.getElementById('demoEntry').style.display = 'none';
@@ -680,7 +681,36 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getSnapshot === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getSnapshot());
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
     else return;
-    request.then(function(data) { applySnapshot(data); setDataSourceState('connected'); }).catch(function() { setDataSourceState('offline'); addLog('warn', '警告', '实机数据暂不可用，保留最近状态', '数据接口'); });
+    request.then(function(data) {
+      applySnapshot(data);
+      // HTTP mode is decided by /healthz. A successful snapshot can still be
+      // mock data or a ROS adapter that has not received robot messages yet.
+      if (ROBOT_DATA_ADAPTER) setDataSourceState('connected');
+    }).catch(function() { setDataSourceState('offline'); addLog('warn', '警告', '实机数据暂不可用，保留最近状态', '数据接口'); });
+  }
+
+  function backendHealthUrl() {
+    return ROBOT_API_BASE.replace(/\/api\/v1\/?$/, '') + '/healthz';
+  }
+
+  function requestBackendHealth() {
+    if (!ROBOT_API_BASE || ROBOT_DATA_ADAPTER) return;
+    fetch(backendHealthUrl()).then(function(res) {
+      if (!res.ok) throw new Error(res.status);
+      return res.json();
+    }).then(function(status) {
+      if (status.telemetryMode === 'ros' && status.dataReady === true) {
+        setDataSourceState('connected');
+      } else if (status.telemetryMode === 'ros') {
+        setDataSourceState('waiting');
+      } else if (status.telemetryMode === 'mock') {
+        setDataSourceState('demo');
+      } else {
+        setDataSourceState('connecting');
+      }
+    }).catch(function() {
+      setDataSourceState('offline');
+    });
   }
 
   function applyAlarms(data) {
@@ -713,8 +743,10 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
   function exportLogs() { var text = localLogs.map(function(log) { return [log.time, log.label, log.text, log.source].join(','); }).join('\n'); var blob = new Blob(['时间,等级,内容,来源\n' + text], {type:'text/csv;charset=utf-8'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'R1-diagnostic-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }
   renderLogs();
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) {
+    requestBackendHealth();
     requestSnapshot();
     requestAlarms();
+    setInterval(requestBackendHealth, 1000);
     setInterval(requestSnapshot, 1000);
     setInterval(requestAlarms, 1000);
   }
