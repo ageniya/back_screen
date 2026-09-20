@@ -65,7 +65,9 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   let grid;
   let animationFrame;
   let loaded = false;
+  let hoveredJointName = '';
   const highlightedMaterials = [];
+  const hoverMaterials = [];
   const faultByJoint = new Map();
   const targetJointPositions = new Map();
   const raycaster = new THREE.Raycaster();
@@ -99,8 +101,46 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     });
   }
 
+  function clearHoverHighlight() {
+    hoverMaterials.splice(0).forEach(({ material, color, emissive, emissiveIntensity }) => {
+      material.color.copy(color);
+      if (material.emissive) {
+        material.emissive.copy(emissive);
+        material.emissiveIntensity = emissiveIntensity;
+      }
+    });
+    hoveredJointName = '';
+  }
+
+  function applyHoverHighlight(joint) {
+    const jointName = joint.urdfName || joint.name;
+    if (jointName === hoveredJointName) return;
+    clearHoverHighlight();
+    hoveredJointName = jointName;
+    const hoverColor = new THREE.Color('#91D5FF');
+    joint.traverse((object) => {
+      if (!object.isMesh || !object.material) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => {
+        if (!material || hoverMaterials.some((entry) => entry.material === material)) return;
+        hoverMaterials.push({
+          material,
+          color: material.color.clone(),
+          emissive: material.emissive ? material.emissive.clone() : new THREE.Color(),
+          emissiveIntensity: material.emissiveIntensity || 0,
+        });
+        material.color.lerp(hoverColor, 0.32);
+        if (material.emissive) {
+          material.emissive.copy(hoverColor);
+          material.emissiveIntensity = 0.18;
+        }
+      });
+    });
+  }
+
   function highlightJoints(faults) {
     if (!robot) return;
+    clearHoverHighlight();
     clearHighlights();
     faults.forEach((fault) => {
       const color = severityClass(fault.level) ? new THREE.Color('#FADB14') : new THREE.Color('#FF4D4F');
@@ -143,6 +183,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
 
   function hideTooltip() {
     if (tooltipEl) tooltipEl.style.display = 'none';
+    clearHoverHighlight();
     if (renderer) renderer.domElement.style.cursor = 'grab';
   }
 
@@ -167,6 +208,8 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
       hideTooltip();
       return;
     }
+
+    applyHoverHighlight(joint);
 
     const jointName = joint.urdfName || joint.name;
     const title = JOINT_LABELS[jointName] || jointName;
