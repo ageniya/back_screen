@@ -221,10 +221,12 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     canvasHost.appendChild(renderer.domElement);
     renderer.domElement.addEventListener('pointermove', showTooltip);
     renderer.domElement.addEventListener('pointerleave', hideTooltip);
+    renderer.domElement.addEventListener('contextmenu', (event) => event.preventDefault());
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.enablePan = false;
+    controls.enablePan = true;
+    controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
     controls.minDistance = 1.5;
     controls.maxDistance = 9;
     controls.maxPolarAngle = Math.PI * 0.78;
