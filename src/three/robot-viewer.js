@@ -65,7 +65,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   let grid;
   let animationFrame;
   let loaded = false;
-  let hoveredJointName = '';
+  let hoveredMeshUuid = '';
   const highlightedMaterials = [];
   const hoverMaterials = [];
   const faultByJoint = new Map();
@@ -109,32 +109,30 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
         material.emissiveIntensity = emissiveIntensity;
       }
     });
-    hoveredJointName = '';
+    hoveredMeshUuid = '';
   }
 
-  function applyHoverHighlight(joint) {
-    const jointName = joint.urdfName || joint.name;
-    if (jointName === hoveredJointName) return;
+  function applyHoverHighlight(mesh) {
+    // URDF 的一个关节节点会包含整条子链；悬停时只处理射线实际命中的网格，
+    // 避免指向肘部却把整条手臂同时点亮。
+    if (!mesh || !mesh.isMesh || !mesh.material || mesh.uuid === hoveredMeshUuid) return;
     clearHoverHighlight();
-    hoveredJointName = jointName;
+    hoveredMeshUuid = mesh.uuid;
     const hoverColor = new THREE.Color('#91D5FF');
-    joint.traverse((object) => {
-      if (!object.isMesh || !object.material) return;
-      const materials = Array.isArray(object.material) ? object.material : [object.material];
-      materials.forEach((material) => {
-        if (!material || hoverMaterials.some((entry) => entry.material === material)) return;
-        hoverMaterials.push({
-          material,
-          color: material.color.clone(),
-          emissive: material.emissive ? material.emissive.clone() : new THREE.Color(),
-          emissiveIntensity: material.emissiveIntensity || 0,
-        });
-        material.color.lerp(hoverColor, 0.32);
-        if (material.emissive) {
-          material.emissive.copy(hoverColor);
-          material.emissiveIntensity = 0.18;
-        }
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    materials.forEach((material) => {
+      if (!material || hoverMaterials.some((entry) => entry.material === material)) return;
+      hoverMaterials.push({
+        material,
+        color: material.color.clone(),
+        emissive: material.emissive ? material.emissive.clone() : new THREE.Color(),
+        emissiveIntensity: material.emissiveIntensity || 0,
       });
+      material.color.lerp(hoverColor, 0.32);
+      if (material.emissive) {
+        material.emissive.copy(hoverColor);
+        material.emissiveIntensity = 0.18;
+      }
     });
   }
 
@@ -209,7 +207,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
       return;
     }
 
-    applyHoverHighlight(joint);
+    applyHoverHighlight(hit.object);
 
     const jointName = joint.urdfName || joint.name;
     const title = JOINT_LABELS[jointName] || jointName;
@@ -329,6 +327,11 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
       robot.rotation.x = -Math.PI / 2;
       robot.traverse((object) => {
         if (object.isMesh) {
+          // STL 可能复用同一个材质实例。每块网格单独复制后，悬停改色才不会
+          // 连带所有使用相同材质的远处部件。
+          object.material = Array.isArray(object.material)
+            ? object.material.map((material) => material.clone())
+            : object.material.clone();
           object.castShadow = false;
           object.receiveShadow = false;
         }
