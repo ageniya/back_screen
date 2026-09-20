@@ -536,6 +536,13 @@ function isDemoMode() {
     if (robot3dViewer) robot3dViewer.resetView();
   }
 
+  function toggleRobot3DOption(option) {
+    if (!robot3dViewer) return;
+    var enabled = robot3dViewer.toggleOption(option);
+    var button = document.getElementById('robot3d' + option.charAt(0).toUpperCase() + option.slice(1) + 'Toggle');
+    if (button) button.classList.toggle('active', enabled);
+  }
+
   function applyDemoStatus() {
     if (!isDemoMode()) return;
     setText('robotModel', demoValue('demoRobotModel'));
@@ -880,6 +887,7 @@ function isDemoMode() {
     openRobot3DView: openRobot3DView,
     closeRobot3DView: closeRobot3DView,
     resetRobot3DView: resetRobot3DView,
+    toggleRobot3DOption: toggleRobot3DOption,
     applyDemoStatus: applyDemoStatus,
     resetDemoStatus: resetDemoStatus,
     addDemoAlert: addDemoAlert,

@@ -47,12 +47,16 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   let camera;
   let controls;
   let robot;
+  let grid;
+  let floor;
+  let lightGroup;
   let animationFrame;
   let loaded = false;
   const highlightedMaterials = [];
   const faultByJoint = new Map();
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
+  const displayOptions = { grid: true, shadow: true, light: true };
 
   function setStatus(text) {
     if (statusEl) statusEl.textContent = text;
@@ -185,6 +189,18 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     controls.update();
   }
 
+  function toggleOption(option) {
+    if (!(option in displayOptions)) return false;
+    displayOptions[option] = !displayOptions[option];
+    if (option === 'grid' && grid) grid.visible = displayOptions.grid;
+    if (option === 'shadow') {
+      if (floor) floor.visible = displayOptions.shadow;
+      if (renderer) renderer.shadowMap.enabled = displayOptions.shadow;
+    }
+    if (option === 'light' && lightGroup) lightGroup.visible = displayOptions.light;
+    return displayOptions[option];
+  }
+
   function resize() {
     if (!renderer || !camera || !canvasHost) return;
     const width = canvasHost.clientWidth;
@@ -222,16 +238,25 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     controls.maxPolarAngle = Math.PI * 0.78;
     resetView();
 
-    scene.add(new THREE.HemisphereLight('#dfe9ff', '#20242a', 2.6));
+    lightGroup = new THREE.Group();
+    lightGroup.add(new THREE.HemisphereLight('#dfe9ff', '#20242a', 2.6));
     const keyLight = new THREE.DirectionalLight('#ffffff', 2.8);
     keyLight.position.set(3, 5, 4);
     keyLight.castShadow = true;
-    scene.add(keyLight);
+    lightGroup.add(keyLight);
     const edgeLight = new THREE.DirectionalLight('#6ca9ff', 1.6);
     edgeLight.position.set(-4, 2, -3);
-    scene.add(edgeLight);
+    lightGroup.add(edgeLight);
+    scene.add(lightGroup);
 
-    const grid = new THREE.GridHelper(7, 14, '#6b7179', '#42474e');
+    floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 10),
+      new THREE.ShadowMaterial({ color: '#000000', opacity: 0.32 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    grid = new THREE.GridHelper(7, 14, '#6b7179', '#42474e');
     grid.position.y = 0;
     scene.add(grid);
 
@@ -241,6 +266,12 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
       robot = loadedRobot;
       // ROS/URDF uses Z-up; Three.js uses Y-up.
       robot.rotation.x = -Math.PI / 2;
+      robot.traverse((object) => {
+        if (object.isMesh) {
+          object.castShadow = true;
+          object.receiveShadow = true;
+        }
+      });
       scene.add(robot);
       loaded = true;
       if (loadingEl) loadingEl.style.display = 'none';
@@ -269,5 +300,5 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     renderer?.dispose();
   }
 
-  return { open, resetView, setFaults, updateJointPositions, destroy, get loaded() { return loaded; } };
+  return { open, resetView, toggleOption, setFaults, updateJointPositions, destroy, get loaded() { return loaded; } };
 }
