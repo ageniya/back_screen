@@ -609,9 +609,10 @@ function isDemoMode() {
     if (!container) return;
     var data = latestRobotSnapshot || getRobot3DDemoSnapshot();
     container.innerHTML = '';
-    robot3DDataViews.forEach(function(view) {
+    robot3DDataViews.forEach(function(view, index) {
       var panel = getRobot3DDataPanel(view, data);
       var card = document.createElement('section'); card.className = 'robot-3d-data-card';
+      card.dataset.slot = String(index + 1);
       var title = document.createElement('div'); title.className = 'robot-3d-data-title'; title.textContent = panel.title;
       var close = document.createElement('button'); close.className = 'robot-3d-data-close'; close.type = 'button'; close.textContent = '×'; close.title = '关闭' + panel.title;
       close.addEventListener('click', function(event) { event.stopPropagation(); toggleRobot3DData(view); });
