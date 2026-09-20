@@ -67,6 +67,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   let loaded = false;
   const highlightedMaterials = [];
   const faultByJoint = new Map();
+  const targetJointPositions = new Map();
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const displayOptions = { grid: true };
@@ -190,8 +191,18 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     const jointPositions = motion.jointPositions || snapshot.jointPositions || {};
     Object.entries(jointPositions).forEach(([name, value]) => {
       if (robot.joints[name] && typeof value === 'number' && Number.isFinite(value)) {
-        robot.setJointValue(name, value);
+        targetJointPositions.set(name, value);
       }
+    });
+  }
+
+  function smoothJointMotion() {
+    if (!robot || !targetJointPositions.size) return;
+    targetJointPositions.forEach((target, name) => {
+      const joint = robot.joints[name];
+      if (!joint || typeof joint.angle !== 'number') return;
+      // 后端每秒更新一次，前端在相邻数据点间插值，视觉上保持连续。
+      joint.setJointValue(THREE.MathUtils.lerp(joint.angle, target, 0.12));
     });
   }
 
@@ -221,6 +232,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
 
   function animate() {
     animationFrame = requestAnimationFrame(animate);
+    smoothJointMotion();
     controls?.update();
     renderer?.render(scene, camera);
   }
