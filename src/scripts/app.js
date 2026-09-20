@@ -1,4 +1,5 @@
 import { normalizeSnapshot, normalizeWorkSummary } from '../api/robot-contract.js';
+import { createRobotViewer } from '../three/robot-viewer.js';
 
 // In API mode the server is the single source of truth for overall health.
 // These are defined before any demo initialisation runs.
@@ -7,6 +8,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
 // When an explicitly configured backend is unavailable, keep the page useful
 // for demos without pretending that the backend is connected.
 var DEMO_FALLBACK_ACTIVE = !ROBOT_DATA_ADAPTER && !ROBOT_API_BASE;
+var robot3dViewer = null;
 
 function isDemoMode() {
   return !ROBOT_DATA_ADAPTER && (!ROBOT_API_BASE || DEMO_FALLBACK_ACTIVE);
@@ -497,6 +499,42 @@ function isDemoMode() {
     document.getElementById('toolsPageTitle').innerHTML = '工具 <span>辅助功能与本机设置</span>';
   }
 
+  // ==================== READ-ONLY 3D ROBOT VIEW ====================
+  function ensureRobot3DViewer() {
+    if (robot3dViewer) return robot3dViewer;
+    robot3dViewer = createRobotViewer({
+      canvasHost: document.getElementById('robot3dCanvas'),
+      loadingEl: document.getElementById('robot3dLoading'),
+      statusEl: document.getElementById('robot3dStatus'),
+      faultsEl: document.getElementById('robot3dFaults')
+    });
+    return robot3dViewer;
+  }
+
+  function openRobot3DView() {
+    document.getElementById('robot3dEntry').style.display = 'none';
+    document.getElementById('demoEntry').style.display = 'none';
+    document.getElementById('demoTools').style.display = 'none';
+    document.getElementById('toolsPlaceholder').style.display = 'none';
+    document.getElementById('robot3dView').style.display = 'flex';
+    document.getElementById('toolsPageTitle').innerHTML = '3D 视图 <span>只读实时机器人状态</span>';
+    var viewer = ensureRobot3DViewer();
+    viewer.open();
+    viewer.setFaults(alertData);
+  }
+
+  function closeRobot3DView() {
+    document.getElementById('robot3dView').style.display = 'none';
+    document.getElementById('robot3dEntry').style.display = 'block';
+    document.getElementById('demoEntry').style.display = isDemoMode() ? 'block' : 'none';
+    document.getElementById('toolsPlaceholder').style.display = 'flex';
+    document.getElementById('toolsPageTitle').innerHTML = '工具 <span>辅助功能与本机设置</span>';
+  }
+
+  function resetRobot3DView() {
+    if (robot3dViewer) robot3dViewer.resetView();
+  }
+
   function applyDemoStatus() {
     if (!isDemoMode()) return;
     setText('robotModel', demoValue('demoRobotModel'));
@@ -716,6 +754,7 @@ function isDemoMode() {
   function applySnapshot(data) {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     data = normalizeSnapshot(data);
+    if (robot3dViewer) robot3dViewer.updateJointPositions(data);
     var health = data.health || {};
     var motion = data.motion || {}, battery = data.battery || {};
     setText('robotModel', displayValue(data.robotModel || (data.identity && data.identity.model)));
@@ -787,6 +826,7 @@ function isDemoMode() {
     var items = Array.isArray(payload) ? payload : (payload && payload.alarms);
     if (!Array.isArray(items)) return;
     alertData = items;
+    if (robot3dViewer) robot3dViewer.setFaults(alertData);
     currentAlertIndex = 0;
     updateAlertIndicators();
     if (document.getElementById('tab-alerts').style.display !== 'none') initAlertsView();
@@ -836,6 +876,9 @@ function isDemoMode() {
     exportLogs: exportLogs,
     openDemoControl: openDemoControl,
     closeDemoControl: closeDemoControl,
+    openRobot3DView: openRobot3DView,
+    closeRobot3DView: closeRobot3DView,
+    resetRobot3DView: resetRobot3DView,
     applyDemoStatus: applyDemoStatus,
     resetDemoStatus: resetDemoStatus,
     addDemoAlert: addDemoAlert,

@@ -308,8 +308,30 @@
   .tool-panel { flex:1; display:grid; grid-template-columns:1fr; gap:12px; min-height:0; overflow-y:auto; padding-right:2px; }
   .tool-card { border:1px solid #333; border-radius:6px; background:#1E1E1E; padding:16px; }
   .tool-card h3 { font-size:15px; color:#FFF; margin-bottom:6px; }.tool-card p { font-size:12px; color:#AAA; line-height:1.6; }
+  .tool-card-primary { border-color:rgba(24,144,255,.55); background:linear-gradient(110deg,rgba(24,144,255,.14),#1E1E1E 48%); }
+  .tool-card-title-row { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .tool-badge { flex-shrink:0; padding:3px 7px; color:#1890FF; background:rgba(24,144,255,.12); border:1px solid rgba(24,144,255,.3); border-radius:10px; font-size:10px; font-weight:600; }
   .tool-card .tool-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }.tool-card .btn { min-height:40px; flex:1; padding:0 12px; font-size:13px; }
   .demo-section-title { margin:16px 0 8px; padding-top:12px; border-top:1px solid #333; color:#D9D9D9; font-size:12px; font-weight:600; }
   .demo-form-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; }
   .demo-field { display:flex; flex-direction:column; gap:5px; color:#AAA; font-size:11px; }.demo-field input, .demo-field select { width:100%; height:31px; border:1px solid #3A3A3A; border-radius:4px; background:#252525; color:#FFF; padding:0 8px; font:12px 'Courier New', monospace; outline:none; }.demo-field input:focus, .demo-field select:focus { border-color:#1890FF; }
+
+  /* --- Tool: read-only 3D robot view --- */
+  .robot-3d-view { height:100%; min-height:0; display:flex; flex-direction:column; gap:9px; }
+  .robot-3d-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:34px; }
+  .robot-3d-toolbar strong { display:block; font-size:15px; }
+  .robot-3d-toolbar span { display:block; color:#AAA; font-size:11px; margin-top:3px; }
+  .robot-3d-toolbar .btn { flex:0 0 auto; height:34px; min-height:34px; padding:0 13px; font-size:12px; background:#303030; color:#FFF; }
+  .robot-3d-content { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 210px; gap:10px; }
+  .robot-3d-canvas { min-width:0; min-height:0; position:relative; overflow:hidden; border:1px solid #3A3A3A; border-radius:6px; background:radial-gradient(circle at 50% 32%,#3F4650 0,#25292F 44%,#17191C 100%); }
+  .robot-3d-canvas canvas { width:100%; height:100%; display:block; touch-action:none; }
+  .robot-3d-loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1; color:#AAA; font-size:12px; background:rgba(20,20,20,.46); }
+  .robot-3d-side { overflow:auto; padding:12px; border:1px solid #333; border-radius:6px; background:#1E1E1E; }
+  .robot-3d-side-title { margin-bottom:8px; color:#FFF; font-size:12px; font-weight:600; }
+  .robot-3d-faults { display:flex; flex-direction:column; gap:7px; min-height:48px; margin-bottom:16px; }
+  .robot-3d-fault { border-left:3px solid #FF4D4F; padding:7px 8px; background:rgba(255,77,79,.09); color:#EEE; font-size:11px; line-height:1.45; }
+  .robot-3d-fault.warning { border-color:#FADB14; background:rgba(250,219,20,.08); }
+  .robot-3d-empty { color:#777; font-size:11px; line-height:1.5; }
+  .robot-3d-hint { color:#AAA; font-size:11px; line-height:1.65; }
+  .robot-3d-reset { width:100%; height:34px; min-height:34px; margin-top:14px; background:#303030; color:#FFF; font-size:12px; }
   .sensor-toggle { display:flex; align-items:center; gap:6px; height:31px; border:1px solid #3A3A3A; border-radius:4px; background:#252525; padding:0 8px; color:#DDD; font-size:12px; }.sensor-toggle input { accent-color:#52C41A; }

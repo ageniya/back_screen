@@ -1,0 +1,214 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import URDFLoader from 'urdf-loader';
+
+const PACKAGE_URL = '/models/wa-t-package/opt/ros/humble/share/wa_t_description/';
+
+const PART_JOINTS = {
+  left_arm: ['Shoulder_Y_L', 'Shoulder_X_L', 'Shoulder_Z_L', 'Elbow_L', 'Wrist_Z_L', 'Wrist_Y_L', 'Wrist_X_L'],
+  right_arm: ['Shoulder_Y_R', 'Shoulder_X_R', 'Shoulder_Z_R', 'Elbow_R', 'Wrist_Z_R', 'Wrist_Y_R', 'Wrist_X_R'],
+  neck: ['Neck_Z', 'Neck_Y'],
+  lifting: ['Lifting_Z'],
+};
+
+function severityClass(level) {
+  return level === 'warning' || level === 'info' ? 'warning' : '';
+}
+
+function relatedJoints(part) {
+  if (!part) return [];
+  if (PART_JOINTS[part]) return PART_JOINTS[part];
+  if (part.includes('left') || part.includes('_L')) return PART_JOINTS.left_arm;
+  if (part.includes('right') || part.includes('_R')) return PART_JOINTS.right_arm;
+  if (part.includes('neck')) return PART_JOINTS.neck;
+  if (part.includes('lift')) return PART_JOINTS.lifting;
+  return [part];
+}
+
+function inferPartFromAlarm(alarm) {
+  const text = `${alarm.title || ''} ${alarm.desc || ''}`.toLowerCase();
+  if (text.includes('左臂') || text.includes('左肩') || text.includes('左肘') || text.includes('左腕')) return 'left_arm';
+  if (text.includes('右臂') || text.includes('右肩') || text.includes('右肘') || text.includes('右腕')) return 'right_arm';
+  if (text.includes('颈') || text.includes('头')) return 'neck';
+  if (text.includes('升降')) return 'lifting';
+  return '';
+}
+
+export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl }) {
+  let renderer;
+  let scene;
+  let camera;
+  let controls;
+  let robot;
+  let animationFrame;
+  let loaded = false;
+  const highlightedMaterials = [];
+
+  function setStatus(text) {
+    if (statusEl) statusEl.textContent = text;
+  }
+
+  function renderFaults(faults = []) {
+    if (!faultsEl) return;
+    if (!faults.length) {
+      faultsEl.innerHTML = '<div class="robot-3d-empty">暂无异常点。接入实机后，诊断告警会自动定位到模型部位。</div>';
+      return;
+    }
+    faultsEl.innerHTML = faults.map((fault) => {
+      const level = severityClass(fault.level);
+      const name = fault.partLabel || fault.part || '未映射部位';
+      return `<div class="robot-3d-fault ${level}"><strong>${name}</strong><br>${fault.message || '检测到异常'}</div>`;
+    }).join('');
+  }
+
+  function clearHighlights() {
+    highlightedMaterials.splice(0).forEach(({ material, color, emissive, emissiveIntensity }) => {
+      material.color.copy(color);
+      if (material.emissive) {
+        material.emissive.copy(emissive);
+        material.emissiveIntensity = emissiveIntensity;
+      }
+    });
+  }
+
+  function highlightJoints(faults) {
+    if (!robot) return;
+    clearHighlights();
+    faults.forEach((fault) => {
+      const color = severityClass(fault.level) ? new THREE.Color('#FADB14') : new THREE.Color('#FF4D4F');
+      relatedJoints(fault.part || '').forEach((jointName) => {
+        const joint = robot.joints[jointName];
+        if (!joint) return;
+        joint.traverse((object) => {
+          if (!object.isMesh || !object.material) return;
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => {
+            if (!material || highlightedMaterials.some((entry) => entry.material === material)) return;
+            highlightedMaterials.push({
+              material,
+              color: material.color.clone(),
+              emissive: material.emissive ? material.emissive.clone() : new THREE.Color(),
+              emissiveIntensity: material.emissiveIntensity || 0,
+            });
+            material.color.lerp(color, 0.55);
+            if (material.emissive) {
+              material.emissive.copy(color);
+              material.emissiveIntensity = 0.3;
+            }
+          });
+        });
+      });
+    });
+  }
+
+  function setFaults(rawFaults = []) {
+    const faults = rawFaults.map((fault) => ({
+      ...fault,
+      part: fault.part || inferPartFromAlarm(fault),
+      partLabel: fault.partLabel || (fault.part ? fault.part : (inferPartFromAlarm(fault) || '未定位部位')),
+    }));
+    renderFaults(faults);
+    highlightJoints(faults);
+  }
+
+  function updateJointPositions(snapshot) {
+    if (!robot) return;
+    const motion = snapshot.motion || {};
+    // 实机适配约定：jointPositions 的键为 URDF 关节名，值为 ROS 弧度值。
+    const jointPositions = motion.jointPositions || snapshot.jointPositions || {};
+    Object.entries(jointPositions).forEach(([name, value]) => {
+      if (robot.joints[name] && typeof value === 'number' && Number.isFinite(value)) {
+        robot.setJointValue(name, value);
+      }
+    });
+  }
+
+  function resetView() {
+    if (!camera || !controls) return;
+    camera.position.set(3.4, 2.4, 4.5);
+    controls.target.set(0, 1.15, 0);
+    controls.update();
+  }
+
+  function resize() {
+    if (!renderer || !camera || !canvasHost) return;
+    const width = canvasHost.clientWidth;
+    const height = canvasHost.clientHeight;
+    if (!width || !height) return;
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
+
+  function animate() {
+    animationFrame = requestAnimationFrame(animate);
+    controls?.update();
+    renderer?.render(scene, camera);
+  }
+
+  function initialize() {
+    if (renderer || !canvasHost) return;
+    scene = new THREE.Scene();
+    scene.fog = new THREE.Fog('#1c2025', 6, 13);
+    camera = new THREE.PerspectiveCamera(38, 1, 0.01, 100);
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    canvasHost.appendChild(renderer.domElement);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minDistance = 1.5;
+    controls.maxDistance = 9;
+    controls.maxPolarAngle = Math.PI * 0.78;
+    resetView();
+
+    scene.add(new THREE.HemisphereLight('#dfe9ff', '#20242a', 2.6));
+    const keyLight = new THREE.DirectionalLight('#ffffff', 2.8);
+    keyLight.position.set(3, 5, 4);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+    const edgeLight = new THREE.DirectionalLight('#6ca9ff', 1.6);
+    edgeLight.position.set(-4, 2, -3);
+    scene.add(edgeLight);
+
+    const grid = new THREE.GridHelper(7, 14, '#6b7179', '#42474e');
+    grid.position.y = 0;
+    scene.add(grid);
+
+    const loader = new URDFLoader();
+    loader.packages = { wa_t_description: PACKAGE_URL };
+    loader.load(`${PACKAGE_URL}urdf/WA-T_V1_1.urdf`, (loadedRobot) => {
+      robot = loadedRobot;
+      // ROS/URDF uses Z-up; Three.js uses Y-up.
+      robot.rotation.x = -Math.PI / 2;
+      scene.add(robot);
+      loaded = true;
+      if (loadingEl) loadingEl.style.display = 'none';
+      setStatus('模型已加载 · 等待实机关节数据');
+      renderFaults([]);
+    }, undefined, () => {
+      setStatus('模型加载失败，请检查本机资源');
+      if (loadingEl) loadingEl.textContent = '模型加载失败';
+    });
+
+    window.addEventListener('resize', resize);
+    resize();
+    animate();
+  }
+
+  function open() {
+    initialize();
+    requestAnimationFrame(resize);
+  }
+
+  function destroy() {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    window.removeEventListener('resize', resize);
+    renderer?.dispose();
+  }
+
+  return { open, resetView, setFaults, updateJointPositions, destroy, get loaded() { return loaded; } };
+}

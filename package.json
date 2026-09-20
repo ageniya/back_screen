@@ -10,5 +10,9 @@
   },
   "devDependencies": {
     "vite": "^6.2.0"
+  },
+  "dependencies": {
+    "three": "^0.186.0",
+    "urdf-loader": "^0.13.1"
   }
 }

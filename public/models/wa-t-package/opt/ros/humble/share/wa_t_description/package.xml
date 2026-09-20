@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>wa_t_description</name>
+  <version>1.0.0</version>
+  <description>URDF description package for the WA-T_V1_1 robot.</description>
+  <maintainer email="TODO@email.com">TODO</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend condition="$ROS_VERSION == 1">catkin</buildtool_depend>
+  <buildtool_depend condition="$ROS_VERSION == 2">ament_cmake</buildtool_depend>
+
+  <!-- <depend>robot_state_publisher</depend>
+  <depend>joint_state_publisher_gui</depend> -->
+
+  <exec_depend condition="$ROS_VERSION == 1">roslaunch</exec_depend>
+  <!-- <exec_depend condition="$ROS_VERSION == 1">rviz</exec_depend> -->
+  <!-- <exec_depend condition="$ROS_VERSION == 1">gazebo</exec_depend> -->
+
+  <!-- <exec_depend condition="$ROS_VERSION == 2">rviz2</exec_depend> -->
+  <!-- <exec_depend condition="$ROS_VERSION == 2">gazebo_ros</exec_depend> -->
+
+  <export>
+    <build_type condition="$ROS_VERSION == 1">catkin</build_type>
+    <build_type condition="$ROS_VERSION == 2">ament_cmake</build_type>
+  </export>
+</package>

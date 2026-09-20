@@ -234,6 +234,13 @@
     <div class="tab-content tool-page" id="tab-tools" style="display:none;">
       <div class="page-title" id="toolsPageTitle">工具 <span>辅助功能与本机设置</span></div>
       <div class="tool-panel">
+        <div class="tool-card tool-card-primary" id="robot3dEntry">
+          <div class="tool-card-title-row">
+            <div><h3>3D 视图</h3><p>查看 WA-T 机器人模型、实时姿态与异常部位。</p></div>
+            <span class="tool-badge">只读</span>
+          </div>
+          <div class="tool-actions"><button class="btn btn-primary" onclick="openRobot3DView()">打开 3D 视图 &#x2192;</button></div>
+        </div>
         <div class="tool-card" id="demoEntry">
           <h3>演示控制</h3>
           <p>用于修改页面演示数据、注入告警并验证界面联动效果。</p>
@@ -296,6 +303,24 @@
           <div class="tool-icon">&#x2699;&#xFE0F;</div>
           <h3>扩展工具</h3>
           <p>屏幕设置、告警偏好和维护辅助功能将在此接入</p>
+        </div>
+        <div class="robot-3d-view" id="robot3dView" style="display:none;">
+          <div class="robot-3d-toolbar">
+            <div><strong>WA-T V1.1 · 3D 状态视图</strong><span id="robot3dStatus">正在加载机器人模型…</span></div>
+            <button class="btn" onclick="closeRobot3DView()">&#x2190; 返回工具</button>
+          </div>
+          <div class="robot-3d-content">
+            <div class="robot-3d-canvas" id="robot3dCanvas" aria-label="机器人三维模型">
+              <div class="robot-3d-loading" id="robot3dLoading">正在加载 WA-T 模型…</div>
+            </div>
+            <aside class="robot-3d-side">
+              <div class="robot-3d-side-title">当前异常点</div>
+              <div class="robot-3d-faults" id="robot3dFaults">暂无异常点</div>
+              <div class="robot-3d-side-title">查看方式</div>
+              <p class="robot-3d-hint">拖动旋转模型，滚轮缩放；本页面只读取状态，不会控制机器人。</p>
+              <button class="btn robot-3d-reset" onclick="resetRobot3DView()">复位视角</button>
+            </aside>
+          </div>
         </div>
       </div>
     </div>
