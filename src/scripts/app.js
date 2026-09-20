@@ -9,6 +9,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
 // for demos without pretending that the backend is connected.
 var DEMO_FALLBACK_ACTIVE = !ROBOT_DATA_ADAPTER && !ROBOT_API_BASE;
 var robot3dViewer = null;
+var latestRobotSnapshot = null;
 
 function isDemoMode() {
   return !ROBOT_DATA_ADAPTER && (!ROBOT_API_BASE || DEMO_FALLBACK_ACTIVE);
@@ -521,6 +522,7 @@ function isDemoMode() {
     document.getElementById('toolsPageTitle').innerHTML = '3D 视图 <span>只读实时机器人状态</span>';
     var viewer = ensureRobot3DViewer();
     viewer.open();
+    if (latestRobotSnapshot) viewer.updateJointPositions(latestRobotSnapshot);
     viewer.setFaults(alertData);
   }
 
@@ -762,6 +764,7 @@ function isDemoMode() {
   function applySnapshot(data) {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     data = normalizeSnapshot(data);
+    latestRobotSnapshot = data;
     if (robot3dViewer) robot3dViewer.updateJointPositions(data);
     var health = data.health || {};
     var motion = data.motion || {}, battery = data.battery || {};

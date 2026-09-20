@@ -18,6 +18,21 @@ const JOINT_LABELS = {
   Shoulder_Y_R: '右肩 Y 轴', Shoulder_X_R: '右肩 X 轴', Shoulder_Z_R: '右肩 Z 轴', Elbow_R: '右肘关节', Wrist_Z_R: '右腕 Z 轴', Wrist_Y_R: '右腕 Y 轴', Wrist_X_R: '右腕 X 轴',
 };
 
+// 离线展示用的安全姿态。真实 ROS 关节数据一到，就会覆盖这些值。
+const DEMO_OPEN_ARM_POSE = {
+  Lifting_Z: 0.12,
+  Shoulder_X_L: 1.35,
+  Shoulder_X_R: -1.35,
+  Shoulder_Y_L: 0.08,
+  Shoulder_Y_R: -0.08,
+  Shoulder_Z_L: 0.1,
+  Shoulder_Z_R: -0.1,
+  Elbow_L: -0.25,
+  Elbow_R: 0.25,
+  Neck_Z: 0,
+  Neck_Y: 0,
+};
+
 function severityClass(level) {
   return level === 'warning' || level === 'info' ? 'warning' : '';
 }
@@ -256,9 +271,10 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
         }
       });
       scene.add(robot);
+      Object.entries(DEMO_OPEN_ARM_POSE).forEach(([name, value]) => robot.setJointValue(name, value));
       loaded = true;
       if (loadingEl) loadingEl.style.display = 'none';
-      setStatus('模型已加载 · 等待实机关节数据');
+      setStatus('演示姿态：双臂张开 · 实机数据会自动覆盖');
       renderFaults([]);
     }, undefined, () => {
       setStatus('模型加载失败，请检查本机资源');

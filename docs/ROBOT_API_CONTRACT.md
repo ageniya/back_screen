@@ -31,7 +31,11 @@
     "target": "X5.00 Y3.00 Z1.20",
     "speed": "0.45 m/s",
     "tcp": "X1.23 Y2.34",
-    "joints": [15, 23, -8, 42, 11, 5]
+    "joints": [15, 23, -8, 42, 11, 5],
+    "jointPositions": {
+      "Shoulder_X_L": 1.35,
+      "Shoulder_X_R": -1.35
+    }
   },
   "payloadKg": 2.3,
   "gripForceN": 12.5,
@@ -60,6 +64,8 @@
 ```
 
 `health.level` 只能是 `normal`、`info`、`warning`、`critical`、`emergency`。`remainingMinutes` 由实机侧按当前电量与最近 20 次平均耗电计算；前端不自行推算。
+
+`motion.jointPositions` 用于 3D 视图：键为 URDF 关节名，值为 ROS2 原始弧度值（直线关节为米）。收到该字段后，模型会实时跟随实机姿态；字段不存在时模型保持演示姿态。
 
 `sensors.bumper` 为碰撞条三态：`online`（绿色，在线未碰撞）、`triggered`（黄色，已碰撞）、`offline`（红色，不在线）。为兼容旧适配器，布尔值 `true` 等同 `online`，`false` 等同 `offline`。
 
