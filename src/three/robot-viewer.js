@@ -133,7 +133,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     const faults = rawFaults.map((fault) => ({
       ...fault,
       part: fault.part || inferPartFromAlarm(fault),
-      partLabel: fault.partLabel || (fault.part ? fault.part : (inferPartFromAlarm(fault) || '未定位部位')),
+      partLabel: fault.partLabel || PART_LABELS[fault.part] || (fault.part ? fault.part : '未定位部位'),
     }));
     faultByJoint.clear();
     faults.forEach((fault) => relatedJoints(fault.part || '').forEach((jointName) => faultByJoint.set(jointName, fault)));
@@ -208,8 +208,9 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
 
   function resetView() {
     if (!camera || !controls) return;
-    camera.position.set(3.4, 2.4, 4.5);
-    controls.target.set(0, 1.15, 0);
+    // 默认让机器人填满主要画面，仍可用滚轮和右键继续调整。
+    camera.position.set(2.35, 1.75, 3.35);
+    controls.target.set(0, 1.05, 0);
     controls.update();
   }
 

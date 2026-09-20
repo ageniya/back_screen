@@ -208,7 +208,8 @@ function isDemoMode() {
   }
 
   // ==================== ALERTS DATA & RENDER ====================
-  var alertData = [
+  // 这些示例只保留作开发参考；初始页面不能把它们当作当前真实告警。
+  var initialAlertExamples = [
     {
       id: 'F001', title: '左臂电机温度过高', severity: 'critical', code: 'F001',
       time: '2024-01-15 14:32:18',
@@ -242,6 +243,7 @@ function isDemoMode() {
       values: [45, 52, 68, 85, 110, 95, 130, 145, 160, 140, 120, 155, 145, 135, 125, 115, 105, 95, 90, 85], axis: { min: 0, max: 200, threshold: 100 }
     }
   ];
+  var alertData = [];
   var demoSensorState = { lidar: true, depthCamera: true, forceSensor: true, bumper: 'online', camera: true, network: true };
   var currentAlertIndex = 0;
 
@@ -701,9 +703,10 @@ function isDemoMode() {
     DEMO_FALLBACK_ACTIVE = true;
     var entry = document.getElementById('demoEntry');
     var tools = document.getElementById('demoTools');
+    var view3d = document.getElementById('robot3dView');
     // Health checks continue while the backend is offline. Do not make the
     // entry card reappear after the user has already opened the demo panel.
-    if (entry && (!tools || tools.style.display === 'none')) entry.style.display = 'block';
+    if (entry && (!tools || tools.style.display === 'none') && (!view3d || view3d.style.display === 'none')) entry.style.display = 'block';
   }
 
   function deactivateDemoFallback() {
