@@ -51,7 +51,7 @@
     "lidar": true,
     "depthCamera": true,
     "forceSensor": true,
-    "bumper": true,
+    "bumper": "online",
     "camera": true,
     "network": true
   },
@@ -60,6 +60,8 @@
 ```
 
 `health.level` 只能是 `normal`、`info`、`warning`、`critical`、`emergency`。`remainingMinutes` 由实机侧按当前电量与最近 20 次平均耗电计算；前端不自行推算。
+
+`sensors.bumper` 为碰撞条三态：`online`（绿色，在线未碰撞）、`triggered`（黄色，已碰撞）、`offline`（红色，不在线）。为兼容旧适配器，布尔值 `true` 等同 `online`，`false` 等同 `offline`。
 
 ## 3. 告警与作业数据
 

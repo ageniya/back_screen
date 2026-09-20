@@ -54,6 +54,18 @@ function isDemoMode() {
   // Status must only change from the robot diagnostic service; never rotate it for display effect.
 
   // ==================== ALERT COUNT & SENSOR STATUS ====================
+  function sensorVisualState(name, state) {
+    // Collision strip is a three-state safety input. Keep true/false support
+    // for older adapters while allowing the explicit real-robot values.
+    if (name === 'bumper') {
+      if (state === true || state === 'online') return 'green';
+      if (state === 'triggered') return 'yellow';
+      if (state === false || state === 'offline') return 'red';
+      return 'unknown';
+    }
+    return state === true ? 'green' : (state === false ? 'red' : 'unknown');
+  }
+
   function updateAlertIndicators() {
     var count = alertData.length;
     document.getElementById('alertCount').textContent = count;
@@ -67,8 +79,7 @@ function isDemoMode() {
     var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
     var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
     sensors.forEach(function(dot, i) {
-      var healthy = demoSensorState[sensorNames[i]] !== false;
-      dot.className = 'sensor-dot ' + (healthy ? 'green' : 'red');
+      dot.className = 'sensor-dot ' + sensorVisualState(sensorNames[i], demoSensorState[sensorNames[i]]);
     });
     refreshOverallHealthFromAlarms();
   }
@@ -228,7 +239,7 @@ function isDemoMode() {
       values: [45, 52, 68, 85, 110, 95, 130, 145, 160, 140, 120, 155, 145, 135, 125, 115, 105, 95, 90, 85], axis: { min: 0, max: 200, threshold: 100 }
     }
   ];
-  var demoSensorState = { lidar: true, depthCamera: true, forceSensor: true, bumper: true, camera: true, network: true };
+  var demoSensorState = { lidar: true, depthCamera: true, forceSensor: true, bumper: 'online', camera: true, network: true };
   var currentAlertIndex = 0;
 
   function updateAlertPageTime() {
@@ -513,6 +524,7 @@ function isDemoMode() {
     var chargeEl = document.getElementById('chargeStatus');
     chargeEl.style.color = chargeStatus === '已充满' ? '#52C41A' : chargeStatus === '充电中' ? '#FADB14' : '#FFFFFF';
     document.querySelectorAll('[data-demo-sensor]').forEach(function(input) { demoSensorState[input.dataset.demoSensor] = input.checked; });
+    demoSensorState.bumper = demoValue('demoBumperState');
     updateAlertIndicators();
     addLog('info', '演示控制', '已应用状态页面参数', '演示控制');
   }
@@ -527,6 +539,8 @@ function isDemoMode() {
     };
     Object.keys(defaults).forEach(function(id) { document.getElementById(id).value = defaults[id]; });
     Object.keys(demoSensorState).forEach(function(key) { demoSensorState[key] = true; });
+    demoSensorState.bumper = 'online';
+    document.getElementById('demoBumperState').value = 'online';
     document.querySelectorAll('[data-demo-sensor]').forEach(function(input) { input.checked = true; });
     applyDemoStatus();
   }
@@ -718,7 +732,7 @@ function isDemoMode() {
     setText('networkIp', data.network && data.network.ip ? 'IP ' + data.network.ip : 'IP --');
     setText('alertCount', displayValue(health.alertCount)); setText('alertBannerCount', displayValue(health.alertCount));
     var sensorFault = false;
-    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var sensorState = data.sensors[sensorNames[index]]; var stateClass = sensorState === true ? 'green' : (sensorState === false ? 'red' : 'unknown'); if (sensorState === false) sensorFault = true; dot.className = 'sensor-dot ' + stateClass; }); }
+    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var sensorState = data.sensors[sensorNames[index]]; var stateClass = sensorVisualState(sensorNames[index], sensorState); if (stateClass === 'red') sensorFault = true; dot.className = 'sensor-dot ' + stateClass; }); }
     var rank = { normal: 0, info: 1, warning: 2, critical: 3, emergency: 4 };
     var healthLevel = health.level || 'normal';
     if (sensorFault && (rank[healthLevel] || 0) < rank.critical) healthLevel = 'critical';

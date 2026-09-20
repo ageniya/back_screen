@@ -152,6 +152,7 @@
     width: 8px; height: 8px; border-radius: 50%;
   }
   .sensor-dot.green { background: #52C41A; box-shadow: 0 0 4px #52C41A; }
+  .sensor-dot.yellow { background: #FADB14; box-shadow: 0 0 4px #FADB14; }
   .sensor-dot.red   { background: #FF4D4F; box-shadow: 0 0 4px #FF4D4F; }
   .sensor-dot.unknown { background: #666666; box-shadow: none; }
 
