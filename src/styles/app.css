@@ -326,6 +326,9 @@
   .robot-3d-canvas { min-width:0; min-height:0; position:relative; overflow:hidden; border:1px solid #3A3A3A; border-radius:6px; background:radial-gradient(circle at 50% 32%,#3F4650 0,#25292F 44%,#17191C 100%); }
   .robot-3d-canvas canvas { width:100%; height:100%; display:block; touch-action:none; }
   .robot-3d-loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1; color:#AAA; font-size:12px; background:rgba(20,20,20,.46); }
+  .robot-3d-tooltip { position:absolute; z-index:2; min-width:150px; max-width:230px; pointer-events:none; padding:8px 10px; border:1px solid rgba(255,255,255,.22); border-radius:5px; background:rgba(12,14,17,.94); box-shadow:0 5px 18px rgba(0,0,0,.38); color:#FFF; font-size:11px; line-height:1.55; }
+  .robot-3d-tooltip strong { display:block; margin-bottom:3px; color:#FFF; font-size:12px; }
+  .robot-3d-tooltip .tooltip-normal { color:#52C41A; }.robot-3d-tooltip .tooltip-warning { color:#FADB14; }.robot-3d-tooltip .tooltip-critical { color:#FF7875; }.robot-3d-tooltip .tooltip-waiting { color:#AAA; }
   .robot-3d-side { overflow:auto; padding:12px; border:1px solid #333; border-radius:6px; background:#1E1E1E; }
   .robot-3d-side-title { margin-bottom:8px; color:#FFF; font-size:12px; font-weight:600; }
   .robot-3d-faults { display:flex; flex-direction:column; gap:7px; min-height:48px; margin-bottom:16px; }

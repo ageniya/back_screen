@@ -11,6 +11,13 @@ const PART_JOINTS = {
   lifting: ['Lifting_Z'],
 };
 
+const PART_LABELS = { left_arm: '左臂', right_arm: '右臂', neck: '颈部', lifting: '升降机构' };
+const JOINT_LABELS = {
+  Lifting_Z: '升降轴', Neck_Z: '颈部旋转轴', Neck_Y: '颈部俯仰轴',
+  Shoulder_Y_L: '左肩 Y 轴', Shoulder_X_L: '左肩 X 轴', Shoulder_Z_L: '左肩 Z 轴', Elbow_L: '左肘关节', Wrist_Z_L: '左腕 Z 轴', Wrist_Y_L: '左腕 Y 轴', Wrist_X_L: '左腕 X 轴',
+  Shoulder_Y_R: '右肩 Y 轴', Shoulder_X_R: '右肩 X 轴', Shoulder_Z_R: '右肩 Z 轴', Elbow_R: '右肘关节', Wrist_Z_R: '右腕 Z 轴', Wrist_Y_R: '右腕 Y 轴', Wrist_X_R: '右腕 X 轴',
+};
+
 function severityClass(level) {
   return level === 'warning' || level === 'info' ? 'warning' : '';
 }
@@ -34,7 +41,7 @@ function inferPartFromAlarm(alarm) {
   return '';
 }
 
-export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl }) {
+export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, tooltipEl }) {
   let renderer;
   let scene;
   let camera;
@@ -43,6 +50,9 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl })
   let animationFrame;
   let loaded = false;
   const highlightedMaterials = [];
+  const faultByJoint = new Map();
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
 
   function setStatus(text) {
     if (statusEl) statusEl.textContent = text;
@@ -107,8 +117,53 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl })
       part: fault.part || inferPartFromAlarm(fault),
       partLabel: fault.partLabel || (fault.part ? fault.part : (inferPartFromAlarm(fault) || '未定位部位')),
     }));
+    faultByJoint.clear();
+    faults.forEach((fault) => relatedJoints(fault.part || '').forEach((jointName) => faultByJoint.set(jointName, fault)));
     renderFaults(faults);
     highlightJoints(faults);
+  }
+
+  function hideTooltip() {
+    if (tooltipEl) tooltipEl.style.display = 'none';
+    if (renderer) renderer.domElement.style.cursor = 'grab';
+  }
+
+  function findParentJoint(object) {
+    let node = object;
+    while (node && node !== robot) {
+      if (node.isURDFJoint) return node;
+      node = node.parent;
+    }
+    return null;
+  }
+
+  function showTooltip(event) {
+    if (!robot || !renderer || !tooltipEl) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObject(robot, true)[0];
+    const joint = hit ? findParentJoint(hit.object) : null;
+    if (!joint) {
+      hideTooltip();
+      return;
+    }
+
+    const jointName = joint.urdfName || joint.name;
+    const title = JOINT_LABELS[jointName] || jointName;
+    const fault = faultByJoint.get(jointName);
+    const isLinear = joint.jointType === 'prismatic';
+    const value = typeof joint.angle === 'number'
+      ? (isLinear ? `${joint.angle.toFixed(3)} m` : `${THREE.MathUtils.radToDeg(joint.angle).toFixed(1)}°`)
+      : '固定连接';
+    const stateClass = fault ? severityClass(fault.level) ? 'tooltip-warning' : 'tooltip-critical' : 'tooltip-normal';
+    const stateText = fault ? `${fault.level === 'warning' || fault.level === 'info' ? '警告' : '异常'}：${fault.message || fault.title || '请检查'}` : '状态正常';
+    tooltipEl.innerHTML = `<strong>${title}</strong><span>关节名：${jointName}</span><br><span>实时位置：${value}</span><br><span class="${stateClass}">${stateText}</span>`;
+    tooltipEl.style.display = 'block';
+    tooltipEl.style.left = `${Math.min(event.clientX - rect.left + 14, rect.width - 235)}px`;
+    tooltipEl.style.top = `${Math.min(event.clientY - rect.top + 14, rect.height - 96)}px`;
+    renderer.domElement.style.cursor = 'pointer';
   }
 
   function updateJointPositions(snapshot) {
@@ -156,6 +211,8 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl })
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
     canvasHost.appendChild(renderer.domElement);
+    renderer.domElement.addEventListener('pointermove', showTooltip);
+    renderer.domElement.addEventListener('pointerleave', hideTooltip);
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -207,6 +264,8 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl })
   function destroy() {
     if (animationFrame) cancelAnimationFrame(animationFrame);
     window.removeEventListener('resize', resize);
+    renderer?.domElement.removeEventListener('pointermove', showTooltip);
+    renderer?.domElement.removeEventListener('pointerleave', hideTooltip);
     renderer?.dispose();
   }
 

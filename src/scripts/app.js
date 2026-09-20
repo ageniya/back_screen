@@ -506,7 +506,8 @@ function isDemoMode() {
       canvasHost: document.getElementById('robot3dCanvas'),
       loadingEl: document.getElementById('robot3dLoading'),
       statusEl: document.getElementById('robot3dStatus'),
-      faultsEl: document.getElementById('robot3dFaults')
+      faultsEl: document.getElementById('robot3dFaults'),
+      tooltipEl: document.getElementById('robot3dTooltip')
     });
     return robot3dViewer;
   }
