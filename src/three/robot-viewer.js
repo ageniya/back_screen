@@ -69,7 +69,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   const highlightedMaterials = [];
   const hoverMaterials = [];
   const faultByJoint = new Map();
-  const targetJointPositions = new Map();
+  const jointTransitions = new Map();
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const displayOptions = { grid: true };
@@ -234,18 +234,25 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     const jointPositions = motion.jointPositions || snapshot.jointPositions || {};
     Object.entries(jointPositions).forEach(([name, value]) => {
       if (robot.joints[name] && typeof value === 'number' && Number.isFinite(value)) {
-        targetJointPositions.set(name, value);
+        jointTransitions.set(name, {
+          from: robot.joints[name].angle,
+          to: value,
+          startedAt: performance.now(),
+        });
       }
     });
   }
 
   function smoothJointMotion() {
-    if (!robot || !targetJointPositions.size) return;
-    targetJointPositions.forEach((target, name) => {
+    if (!robot || !jointTransitions.size) return;
+    const now = performance.now();
+    jointTransitions.forEach((transition, name) => {
       const joint = robot.joints[name];
       if (!joint || typeof joint.angle !== 'number') return;
-      // 后端每秒更新一次，前端在相邻数据点间插值，视觉上保持连续。
-      joint.setJointValue(THREE.MathUtils.lerp(joint.angle, target, 0.12));
+      // 后端每秒更新一次，前端在相邻数据点间以恒定速度插值。
+      const progress = Math.min((now - transition.startedAt) / 1000, 1);
+      joint.setJointValue(THREE.MathUtils.lerp(transition.from, transition.to, progress));
+      if (progress >= 1) jointTransitions.delete(name);
     });
   }
 

@@ -789,9 +789,11 @@ function isDemoMode() {
     var entry = document.getElementById('demoEntry');
     var tools = document.getElementById('demoTools');
     var placeholder = document.getElementById('toolsPlaceholder');
+    var view3d = document.getElementById('robot3dView');
     if (entry) entry.style.display = 'none';
     if (tools) tools.style.display = 'none';
-    if (placeholder) placeholder.style.display = 'flex';
+    // 后端恢复连接时，不能把“扩展工具”占位区插回正在打开的 3D 页面。
+    if (placeholder && (!view3d || view3d.style.display === 'none')) placeholder.style.display = 'flex';
   }
 
   setDataSourceState(ROBOT_DATA_ADAPTER || ROBOT_API_BASE ? 'connecting' : 'demo');
@@ -948,6 +950,7 @@ function isDemoMode() {
     requestSnapshot();
     requestAlarms();
     setInterval(requestBackendHealth, 1000);
+    // 实机快照和告警都按 1Hz 获取；3D 视图会在两次快照之间自行平滑过渡。
     setInterval(requestSnapshot, 1000);
     setInterval(requestAlarms, 1000);
   }
