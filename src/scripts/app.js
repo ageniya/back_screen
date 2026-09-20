@@ -605,10 +605,12 @@ function isDemoMode() {
   }
 
   function renderRobot3DDataPanels() {
-    var container = document.getElementById('robot3dDataCards');
-    if (!container) return;
+    var leftDock = document.getElementById('robot3dDataLeft');
+    var rightDock = document.getElementById('robot3dDataRight');
+    if (!leftDock || !rightDock) return;
     var data = latestRobotSnapshot || getRobot3DDemoSnapshot();
-    container.innerHTML = '';
+    leftDock.innerHTML = '';
+    rightDock.innerHTML = '';
     robot3DDataViews.forEach(function(view, index) {
       var panel = getRobot3DDataPanel(view, data);
       var card = document.createElement('section'); card.className = 'robot-3d-data-card';
@@ -625,7 +627,10 @@ function isDemoMode() {
         if (row[2]) value.className = 'data-' + row[2];
         item.appendChild(key); item.appendChild(value); list.appendChild(item);
       });
-      card.appendChild(title); card.appendChild(list); container.appendChild(card);
+      card.appendChild(title); card.appendChild(list);
+      // 第 1/3 个在左侧上/下角，第 2/4 个在右侧上/下角；关闭后数组收缩，
+      // 后面的卡片自然向前补位，且空侧栏不会占据模型空间。
+      (index % 2 === 0 ? leftDock : rightDock).appendChild(card);
     });
   }
 

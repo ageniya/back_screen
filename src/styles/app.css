@@ -325,22 +325,23 @@
   .robot-3d-toolbar-actions { display:flex; align-items:center; gap:6px; }
   .robot-3d-toggle { height:30px; padding:0 9px; border:1px solid #454545; border-radius:4px; background:#262626; color:#AAA; font:11px inherit; cursor:pointer; }
   .robot-3d-toggle.active { color:#FFF; border-color:#1890FF; background:rgba(24,144,255,.2); }
-  .robot-3d-content { flex:1; min-height:0; display:grid; grid-template-columns:minmax(150px,185px) minmax(0,1fr) minmax(150px,185px); grid-template-rows:minmax(0,1fr) minmax(0,1fr) auto; gap:10px; }
-  .robot-3d-canvas { grid-column:2; grid-row:1 / span 2; min-width:0; min-height:0; position:relative; overflow:hidden; border:1px solid #3A3A3A; border-radius:6px; background:radial-gradient(circle at 50% 32%,#3F4650 0,#25292F 44%,#17191C 100%); }
+  .robot-3d-content { flex:1; min-height:0; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-rows:minmax(0,1fr) auto; gap:10px; }
+  .robot-3d-canvas { grid-column:2; grid-row:1; min-width:0; min-height:0; position:relative; overflow:hidden; border:1px solid #3A3A3A; border-radius:6px; background:radial-gradient(circle at 50% 32%,#3F4650 0,#25292F 44%,#17191C 100%); }
   .robot-3d-canvas canvas { width:100%; height:100%; display:block; touch-action:none; }
   .robot-3d-loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1; color:#AAA; font-size:12px; background:rgba(20,20,20,.46); }
   .robot-3d-tooltip { position:absolute; z-index:2; min-width:150px; max-width:230px; pointer-events:none; padding:8px 10px; border:1px solid rgba(255,255,255,.22); border-radius:5px; background:rgba(12,14,17,.94); box-shadow:0 5px 18px rgba(0,0,0,.38); color:#FFF; font-size:11px; line-height:1.55; }
   .robot-3d-tooltip strong { display:block; margin-bottom:3px; color:#FFF; font-size:12px; }
   .robot-3d-tooltip .tooltip-normal { color:#52C41A; }.robot-3d-tooltip .tooltip-warning { color:#FADB14; }.robot-3d-tooltip .tooltip-critical { color:#FF7875; }.robot-3d-tooltip .tooltip-waiting { color:#AAA; }
-  .robot-3d-data-cards { display:contents; }
+  .robot-3d-data-dock { grid-row:1; width:185px; min-width:0; display:flex; flex-direction:column; justify-content:space-between; gap:10px; }
+  .robot-3d-data-dock:empty { display:none; }
+  .robot-3d-data-dock-left { grid-column:1; }.robot-3d-data-dock-right { grid-column:3; }
   .robot-3d-data-card { min-width:0; overflow:auto; padding:9px 10px; border:1px solid rgba(255,255,255,.16); border-radius:5px; background:#1A1C20; box-shadow:0 5px 18px rgba(0,0,0,.25); }
-  .robot-3d-data-card[data-slot="1"] { grid-column:1; grid-row:1; }.robot-3d-data-card[data-slot="2"] { grid-column:3; grid-row:1; }.robot-3d-data-card[data-slot="3"] { grid-column:1; grid-row:2; }.robot-3d-data-card[data-slot="4"] { grid-column:3; grid-row:2; }
   .robot-3d-data-title { display:flex; align-items:center; justify-content:space-between; min-height:16px; margin-bottom:7px; color:#FFF; font-size:12px; font-weight:600; }
   .robot-3d-data-close { width:17px; height:17px; padding:0; border:0; border-radius:3px; background:transparent; color:#AAA; font:16px/15px Arial,sans-serif; cursor:pointer; }.robot-3d-data-close:hover { background:#454545; color:#FFF; }
   .robot-3d-data-list { display:flex; flex-direction:column; gap:5px; color:#C9CDD3; font:10px/1.45 'Courier New', monospace; }
   .robot-3d-data-item { display:flex; justify-content:space-between; gap:8px; }.robot-3d-data-item span:first-child { color:#8E96A3; }.robot-3d-data-item span:last-child { color:#FFF; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .robot-3d-data-item .data-green { color:#52C41A!important; }.robot-3d-data-item .data-yellow { color:#FADB14!important; }.robot-3d-data-item .data-red { color:#FF7875!important; }
-  .robot-3d-side { grid-column:1 / -1; grid-row:3; max-height:92px; overflow:auto; padding:10px 12px; border:1px solid #333; border-radius:6px; background:#1E1E1E; }
+  .robot-3d-side { grid-column:1 / -1; grid-row:2; max-height:92px; overflow:auto; padding:10px 12px; border:1px solid #333; border-radius:6px; background:#1E1E1E; }
   .robot-3d-side-title { margin-bottom:8px; color:#FFF; font-size:12px; font-weight:600; }
   .robot-3d-faults { display:flex; flex-direction:column; gap:7px; min-height:48px; margin-bottom:16px; }
   .robot-3d-fault { border-left:3px solid #FF4D4F; padding:7px 8px; background:rgba(255,77,79,.09); color:#EEE; font-size:11px; line-height:1.45; }
