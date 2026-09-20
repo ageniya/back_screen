@@ -309,6 +309,10 @@
             <div><strong>WA-T V1.1 · 3D 状态视图</strong><span id="robot3dStatus">正在加载机器人模型…</span></div>
             <div class="robot-3d-toolbar-actions">
               <button class="robot-3d-toggle active" id="robot3dGridToggle" onclick="toggleRobot3DOption('grid')">网格</button>
+              <button class="robot-3d-toggle active" data-robot3d-data="motion" onclick="selectRobot3DData('motion', this)">运动</button>
+              <button class="robot-3d-toggle" data-robot3d-data="joints" onclick="selectRobot3DData('joints', this)">关节</button>
+              <button class="robot-3d-toggle" data-robot3d-data="battery" onclick="selectRobot3DData('battery', this)">电池</button>
+              <button class="robot-3d-toggle" data-robot3d-data="sensors" onclick="selectRobot3DData('sensors', this)">传感器</button>
               <button class="btn" onclick="closeRobot3DView()">&#x2190; 返回工具</button>
             </div>
           </div>
@@ -316,6 +320,10 @@
             <div class="robot-3d-canvas" id="robot3dCanvas" aria-label="机器人三维模型">
               <div class="robot-3d-loading" id="robot3dLoading">正在加载 WA-T 模型…</div>
               <div class="robot-3d-tooltip" id="robot3dTooltip" style="display:none;"></div>
+              <div class="robot-3d-data-card" id="robot3dDataCard">
+                <div class="robot-3d-data-title" id="robot3dDataTitle">运动状态</div>
+                <div class="robot-3d-data-list" id="robot3dDataList"></div>
+              </div>
             </div>
             <aside class="robot-3d-side">
               <div class="robot-3d-side-title">当前异常点</div>

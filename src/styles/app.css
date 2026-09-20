@@ -332,6 +332,11 @@
   .robot-3d-tooltip { position:absolute; z-index:2; min-width:150px; max-width:230px; pointer-events:none; padding:8px 10px; border:1px solid rgba(255,255,255,.22); border-radius:5px; background:rgba(12,14,17,.94); box-shadow:0 5px 18px rgba(0,0,0,.38); color:#FFF; font-size:11px; line-height:1.55; }
   .robot-3d-tooltip strong { display:block; margin-bottom:3px; color:#FFF; font-size:12px; }
   .robot-3d-tooltip .tooltip-normal { color:#52C41A; }.robot-3d-tooltip .tooltip-warning { color:#FADB14; }.robot-3d-tooltip .tooltip-critical { color:#FF7875; }.robot-3d-tooltip .tooltip-waiting { color:#AAA; }
+  .robot-3d-data-card { position:absolute; z-index:2; top:10px; left:10px; width:185px; padding:10px; border:1px solid rgba(255,255,255,.16); border-radius:5px; background:rgba(18,20,24,.86); box-shadow:0 5px 18px rgba(0,0,0,.25); }
+  .robot-3d-data-title { margin-bottom:7px; color:#FFF; font-size:12px; font-weight:600; }
+  .robot-3d-data-list { display:flex; flex-direction:column; gap:5px; color:#C9CDD3; font:10px/1.45 'Courier New', monospace; }
+  .robot-3d-data-item { display:flex; justify-content:space-between; gap:8px; }.robot-3d-data-item span:first-child { color:#8E96A3; }.robot-3d-data-item span:last-child { color:#FFF; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .robot-3d-data-item .data-green { color:#52C41A!important; }.robot-3d-data-item .data-yellow { color:#FADB14!important; }.robot-3d-data-item .data-red { color:#FF7875!important; }
   .robot-3d-side { overflow:auto; padding:12px; border:1px solid #333; border-radius:6px; background:#1E1E1E; }
   .robot-3d-side-title { margin-bottom:8px; color:#FFF; font-size:12px; font-weight:600; }
   .robot-3d-faults { display:flex; flex-direction:column; gap:7px; min-height:48px; margin-bottom:16px; }

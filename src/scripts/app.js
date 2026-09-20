@@ -10,6 +10,7 @@ var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
 var DEMO_FALLBACK_ACTIVE = !ROBOT_DATA_ADAPTER && !ROBOT_API_BASE;
 var robot3dViewer = null;
 var latestRobotSnapshot = null;
+var robot3DDataView = 'motion';
 
 function isDemoMode() {
   return !ROBOT_DATA_ADAPTER && (!ROBOT_API_BASE || DEMO_FALLBACK_ACTIVE);
@@ -526,6 +527,7 @@ function isDemoMode() {
     viewer.open();
     if (latestRobotSnapshot) viewer.updateJointPositions(latestRobotSnapshot);
     viewer.setFaults(alertData);
+    renderRobot3DDataPanel();
   }
 
   function closeRobot3DView() {
@@ -545,6 +547,77 @@ function isDemoMode() {
     var enabled = robot3dViewer.toggleOption(option);
     var button = document.getElementById('robot3d' + option.charAt(0).toUpperCase() + option.slice(1) + 'Toggle');
     if (button) button.classList.toggle('active', enabled);
+  }
+
+  function getRobot3DDemoSnapshot() {
+    var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
+    var sensors = {};
+    document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) {
+      var name = sensorNames[index];
+      sensors[name] = dot.classList.contains('green') ? true : dot.classList.contains('yellow') ? 'triggered' : false;
+    });
+    return {
+      motion: {
+        position: document.getElementById('currentPosition').textContent,
+        target: document.getElementById('targetPosition').textContent,
+        speed: document.getElementById('currentSpeed').textContent,
+        tcp: document.getElementById('tcpPosition').textContent,
+        joints: [1, 2, 3, 4, 5, 6].map(function(index) { return document.getElementById('joint' + index).textContent; })
+      },
+      battery: {
+        percent: document.getElementById('batteryLevel').textContent,
+        voltage: document.getElementById('batteryVoltage').textContent,
+        current: document.getElementById('batteryCurrent').textContent,
+        temperature: document.getElementById('batteryTemperature').textContent,
+        chargeStatus: document.getElementById('chargeStatus').textContent
+      },
+      sensors: sensors
+    };
+  }
+
+  function renderRobot3DDataPanel() {
+    var title = document.getElementById('robot3dDataTitle');
+    var list = document.getElementById('robot3dDataList');
+    if (!title || !list) return;
+    var data = latestRobotSnapshot || getRobot3DDemoSnapshot();
+    var motion = data.motion || {}, battery = data.battery || {}, sensors = data.sensors || {};
+    var rows = [];
+    if (robot3DDataView === 'motion') {
+      title.textContent = '运动状态';
+      rows = [['当前位置', motion.position], ['目标点', motion.target], ['速度', motion.speed], ['TCP', motion.tcp]];
+    } else if (robot3DDataView === 'joints') {
+      title.textContent = '关节状态';
+      var positions = motion.jointPositions || {};
+      var entries = Object.entries(positions).slice(0, 6);
+      rows = entries.length ? entries.map(function(entry) {
+        return [entry[0], (Number(entry[1]) * 180 / Math.PI).toFixed(1) + '°'];
+      }) : (motion.joints || []).slice(0, 6).map(function(value, index) { return ['J' + (index + 1), value]; });
+    } else if (robot3DDataView === 'battery') {
+      title.textContent = '电池状态';
+      rows = [['电量', displayValue(battery.percent, '%')], ['电压', displayValue(battery.voltage, 'V')], ['电流', displayValue(battery.current, 'A')], ['温度', displayValue(battery.temperature, '°C')], ['状态', battery.chargeStatus]];
+    } else {
+      title.textContent = '传感器状态';
+      rows = [['激光雷达', sensors.lidar], ['深度相机', sensors.depthCamera], ['六维力', sensors.forceSensor], ['碰撞条', sensors.bumper], ['摄像头', sensors.camera], ['网络', sensors.network]].map(function(item) {
+        var state = sensorVisualState(item[0] === '碰撞条' ? 'bumper' : 'sensor', item[1]);
+        return [item[0], state === 'green' ? '正常' : state === 'yellow' ? '已触发' : state === 'red' ? '离线' : '未知', state];
+      });
+    }
+    list.innerHTML = '';
+    rows.forEach(function(row) {
+      var item = document.createElement('div');
+      item.className = 'robot-3d-data-item';
+      var key = document.createElement('span'); key.textContent = row[0] || '--';
+      var value = document.createElement('span'); value.textContent = row[1] === undefined || row[1] === null || row[1] === '' ? '--' : row[1];
+      if (row[2]) value.className = 'data-' + row[2];
+      item.appendChild(key); item.appendChild(value); list.appendChild(item);
+    });
+  }
+
+  function selectRobot3DData(view, button) {
+    robot3DDataView = view;
+    document.querySelectorAll('[data-robot3d-data]').forEach(function(control) { control.classList.remove('active'); });
+    if (button) button.classList.add('active');
+    renderRobot3DDataPanel();
   }
 
   function applyDemoStatus() {
@@ -576,6 +649,7 @@ function isDemoMode() {
     document.querySelectorAll('[data-demo-sensor]').forEach(function(input) { demoSensorState[input.dataset.demoSensor] = input.checked; });
     demoSensorState.bumper = demoValue('demoBumperState');
     updateAlertIndicators();
+    renderRobot3DDataPanel();
     addLog('info', '演示控制', '已应用状态页面参数', '演示控制');
   }
 
@@ -768,6 +842,7 @@ function isDemoMode() {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     data = normalizeSnapshot(data);
     latestRobotSnapshot = data;
+    renderRobot3DDataPanel();
     if (robot3dViewer) robot3dViewer.updateJointPositions(data);
     var health = data.health || {};
     var motion = data.motion || {}, battery = data.battery || {};
@@ -894,6 +969,7 @@ function isDemoMode() {
     closeRobot3DView: closeRobot3DView,
     resetRobot3DView: resetRobot3DView,
     toggleRobot3DOption: toggleRobot3DOption,
+    selectRobot3DData: selectRobot3DData,
     applyDemoStatus: applyDemoStatus,
     resetDemoStatus: resetDemoStatus,
     addDemoAlert: addDemoAlert,
