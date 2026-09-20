@@ -30,7 +30,8 @@
     "position": "X1.23 Y2.34 Z0.56",
     "target": "X5.00 Y3.00 Z1.20",
     "speed": "0.45 m/s",
-    "tcp": "X1.23 Y2.34",
+    "leftTcp": "X1.23 Y2.62 Z0.56",
+    "rightTcp": "X1.23 Y2.06 Z0.56",
     "joints": [15, 23, -8, 42, 11, 5],
     "jointPositions": {
       "Shoulder_X_L": 1.35,
@@ -64,6 +65,8 @@
 ```
 
 `health.level` 只能是 `normal`、`info`、`warning`、`critical`、`emergency`。`remainingMinutes` 由实机侧按当前电量与最近 20 次平均耗电计算；前端不自行推算。
+
+`motion.leftTcp`、`motion.rightTcp` 分别是左、右手末端工具中心点（TCP）的 XYZ 坐标。双臂机器人必须分别提供；旧字段 `motion.tcp` 只为旧版调用方兼容保留，新页面不再显示它。
 
 `motion.jointPositions` 用于 3D 视图：键为 URDF 关节名，值为 ROS2 原始弧度值（直线关节为米）。收到该字段后，模型会实时跟随实机姿态；字段不存在时模型保持演示姿态。
 

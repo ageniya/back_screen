@@ -561,7 +561,8 @@ function isDemoMode() {
         position: document.getElementById('currentPosition').textContent,
         target: document.getElementById('targetPosition').textContent,
         speed: document.getElementById('currentSpeed').textContent,
-        tcp: document.getElementById('tcpPosition').textContent,
+        leftTcp: document.getElementById('leftTcpPosition').textContent,
+        rightTcp: document.getElementById('rightTcpPosition').textContent,
         joints: [1, 2, 3, 4, 5, 6].map(function(index) { return document.getElementById('joint' + index).textContent; })
       },
       battery: {
@@ -584,7 +585,7 @@ function isDemoMode() {
     var rows = [];
     if (robot3DDataView === 'motion') {
       title.textContent = '运动状态';
-      rows = [['当前位置', motion.position], ['目标点', motion.target], ['速度', motion.speed], ['TCP', motion.tcp]];
+      rows = [['当前位置', motion.position], ['目标点', motion.target], ['速度', motion.speed], ['左手 TCP', motion.leftTcp], ['右手 TCP', motion.rightTcp]];
     } else if (robot3DDataView === 'joints') {
       title.textContent = '关节状态';
       var positions = motion.jointPositions || {};
@@ -626,7 +627,8 @@ function isDemoMode() {
     setText('currentPosition', demoValue('demoCurrentPosition'));
     setText('targetPosition', demoValue('demoTargetPosition'));
     setText('currentSpeed', demoValue('demoCurrentSpeed'));
-    setText('tcpPosition', demoValue('demoTcpPosition'));
+    setText('leftTcpPosition', demoValue('demoLeftTcpPosition'));
+    setText('rightTcpPosition', demoValue('demoRightTcpPosition'));
     setText('uptime', demoValue('demoUptime'));
     setText('remainingTime', demoValue('demoRemainingTime') + 'm');
     setText('payload', demoValue('demoPayload') + 'kg');
@@ -656,7 +658,7 @@ function isDemoMode() {
   function resetDemoStatus() {
     if (!isDemoMode()) return;
     var defaults = {
-      demoRobotModel: 'R1', demoCurrentPosition: 'X1.23 Y2.34 Z0.56', demoTargetPosition: 'X5.00 Y3.00 Z1.20', demoCurrentSpeed: '0.45 m/s', demoTcpPosition: 'X1.23 Y2.34',
+      demoRobotModel: 'R1', demoCurrentPosition: 'X1.23 Y2.34 Z0.56', demoTargetPosition: 'X5.00 Y3.00 Z1.20', demoCurrentSpeed: '0.45 m/s', demoLeftTcpPosition: 'X1.23 Y2.62 Z0.56', demoRightTcpPosition: 'X1.23 Y2.06 Z0.56',
       demoUptime: '2h23m', demoRemainingTime: '42', demoPayload: '2.3', demoGripForce: '12.5', demoOperationMode: '自动', demoNetworkIp: '192.168.1.10',
       demoJoint1: '15', demoJoint2: '23', demoJoint3: '-8', demoJoint4: '42', demoJoint5: '11', demoJoint6: '5',
       demoBatteryPercent: '85', demoBatteryVoltage: '14.8', demoBatteryCurrent: '3.2', demoBatteryTemperature: '28', demoCellVoltage: '3.70', demoChargeStatus: '充电中', demoChargeCycles: '12'
@@ -849,7 +851,9 @@ function isDemoMode() {
     var health = data.health || {};
     var motion = data.motion || {}, battery = data.battery || {};
     setText('robotModel', displayValue(data.robotModel || (data.identity && data.identity.model)));
-    setText('currentPosition', displayValue(motion.position)); setText('currentSpeed', displayValue(motion.speed)); setText('targetPosition', displayValue(motion.target)); setText('tcpPosition', displayValue(motion.tcp));
+    setText('currentPosition', displayValue(motion.position)); setText('currentSpeed', displayValue(motion.speed)); setText('targetPosition', displayValue(motion.target));
+    // 老接口只有 tcp 时不猜测它属于哪一只手；左右手字段齐全后才展示实时值。
+    setText('leftTcpPosition', displayValue(motion.leftTcp)); setText('rightTcpPosition', displayValue(motion.rightTcp));
     setText('uptime', displayValue(data.uptime)); setText('remainingTime', displayValue(battery.remainingMinutes, 'm'));
     setText('batteryLevel', displayValue(battery.percent, '%')); setText('batteryTop', displayValue(battery.percent, '%'));
     setText('batteryVoltage', displayValue(battery.voltage, 'V')); setText('batteryCurrent', displayValue(battery.current, 'A'));
