@@ -117,6 +117,8 @@ function isDemoMode() {
 
   // ==================== TAB SWITCHING ====================
   function switchTab(tabId, btn) {
+    // 离开工具页时暂停隐藏的 3D WebGL 渲染，避免在状态页仍占用 Pico CPU。
+    if (tabId !== 'tools' && robot3dViewer) robot3dViewer.pause();
     // Hide all tab contents
     var contents = document.querySelectorAll('.tab-content');
     contents.forEach(function(c) { c.style.display = 'none'; });
@@ -139,36 +141,37 @@ function isDemoMode() {
     if (btn.disabled) return;
     btn.disabled = true;
     btn.innerHTML = '&#x23F3; 诊断中...';
-    setTimeout(function() {
-      if (isDemoMode()) {
+    if (isDemoMode()) {
+      // 演示模式保留短暂反馈；实机模式不人为等待，立即发送诊断请求。
+      setTimeout(function() {
         btn.disabled = false;
         btn.innerHTML = '&#x2705; 诊断完成';
         addDemoAlert('warning');
         addLog('info', '诊断', '演示诊断已完成，并注入一条模拟告警', '演示控制');
         setTimeout(function() { btn.innerHTML = '&#x1F504; 一键诊断'; }, 2000);
-      } else {
-        invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断').then(function(success) {
-          btn.disabled = false;
-          btn.innerHTML = success ? '&#x2705; 已请求诊断' : '&#x26A0; 诊断未接入';
-          setTimeout(function() { btn.innerHTML = '&#x1F504; 一键诊断'; }, 2000);
-        });
-      }
-    }, 3000);
+      }, 1200);
+      return;
+    }
+    invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断').then(function(success) {
+      btn.disabled = false;
+      btn.innerHTML = success ? '&#x2705; 已请求诊断' : '&#x26A0; 诊断未接入';
+      setTimeout(function() { btn.innerHTML = '&#x1F504; 一键诊断'; }, 2000);
+    });
   }
 
   // ==================== FAULT CLEAR BUTTON ====================
   function clearFault() {
     if (!alertData.length) {
-      alert('当前没有可清除的告警。');
+      alert('当前没有需要确认恢复的告警。');
       return;
     }
-    if (!confirm('确认发送故障清除请求？\n\n实机运行时，仍在触发的故障不会被清除。')) return;
+    if (!confirm('确认已人工排除故障？\n\n系统只会清除已经恢复的告警；仍在触发的故障会保留。')) return;
 
     var btn = document.getElementById('btnFaultClear');
     if (!btn || btn.disabled) return;
     var originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '&#x23F3; 清除中...';
+    btn.innerHTML = '&#x23F3; 确认中...';
 
     if (isDemoMode()) {
       alertData = [];
@@ -177,7 +180,7 @@ function isDemoMode() {
       renderAlertList();
       showNoActiveAlerts();
       addLog('info', '演示控制', '已清除全部模拟告警', '演示控制');
-      btn.innerHTML = '&#x2705; 已清除';
+      btn.innerHTML = '&#x2705; 已确认';
       setTimeout(function() {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -185,7 +188,7 @@ function isDemoMode() {
       return;
     }
 
-    invokeRobotCommand('/alarms/clear-recovered', {}, '已请求清除已恢复故障').then(function(success) {
+    invokeRobotCommand('/alarms/clear-recovered', {}, '已请求确认已恢复告警').then(function(success) {
       if (!success) {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -195,7 +198,7 @@ function isDemoMode() {
       // fault.  The server / real diagnosis engine remains authoritative.
       requestAlarms();
       requestSnapshot();
-      btn.innerHTML = '&#x2705; 已清除';
+      btn.innerHTML = '&#x2705; 已确认';
       setTimeout(function() {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -534,6 +537,7 @@ function isDemoMode() {
   }
 
   function closeRobot3DView() {
+    if (robot3dViewer) robot3dViewer.pause();
     document.getElementById('robot3dView').style.display = 'none';
     document.getElementById('robot3dEntry').style.display = 'block';
     document.getElementById('demoEntry').style.display = isDemoMode() ? 'block' : 'none';
@@ -709,7 +713,7 @@ function isDemoMode() {
   }
 
   // ==================== SUMMARY DATA & RENDER ====================
-  var summaryData = {
+  var demoSummaryData = {
     // 上一次结束充电时的电量 (Ah)
     lastChargeAh: 100,
     // 触发时保存的电量 (Ah)
@@ -732,51 +736,77 @@ function isDemoMode() {
       { name: '包装下线 A-20',  weight: 39.7, time: '14:08' }
     ]
   };
+  // 接口模式不使用演示作业记录。未接入任务/充电数据时必须明确显示为空，
+  // 避免现场用户把样例搬运数据误解为本次真实作业。
+  var summaryData = isDemoMode() ? demoSummaryData : {
+    lastChargeAh: null, triggerAh: null, lastChargeEndTs: null,
+    chargeStartTs: null, ratedLoad: null, tasks: []
+  };
 
   function renderSummary() {
     var d = summaryData;
+    var tasks = Array.isArray(d.tasks) ? d.tasks.filter(function(task) {
+      return task && Number.isFinite(Number(task.weight));
+    }) : [];
+    var numberOrNull = function(value) {
+      var number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    };
+    var consumptionAh = numberOrNull(d.consumptionAh);
+    if (consumptionAh === null) {
+      var lastChargeAh = numberOrNull(d.lastChargeAh);
+      var triggerAh = numberOrNull(d.triggerAh);
+      consumptionAh = lastChargeAh !== null && triggerAh !== null ? lastChargeAh - triggerAh : null;
+    }
+    var durationSec = numberOrNull(d.durationSec);
+    if (durationSec === null) {
+      var lastChargeEndTs = numberOrNull(d.lastChargeEndTs);
+      var chargeStartTs = numberOrNull(d.chargeStartTs);
+      durationSec = lastChargeEndTs !== null && chargeStartTs !== null ? chargeStartTs - lastChargeEndTs : null;
+    }
+    if (durationSec !== null && durationSec < 0) durationSec = null;
+    var avgCurrent = numberOrNull(d.avgCurrent);
+    if (avgCurrent === null && consumptionAh !== null && durationSec && durationSec > 0) avgCurrent = consumptionAh / (durationSec / 3600);
+    var ratedLoad = numberOrNull(d.ratedLoad);
+    var totalWeight = tasks.reduce(function(acc, task) { return acc + Number(task.weight); }, 0);
+    var avgRate = ratedLoad && ratedLoad > 0 && tasks.length ? totalWeight / tasks.length / ratedLoad * 100 : null;
+    var hasRecord = tasks.length > 0 || consumptionAh !== null || durationSec !== null;
 
-    // 本次消耗电量 (Ah) = 上一次结束充电的电量 - 触发时保存的电量
-    var consumptionAh = d.consumptionAh !== undefined ? d.consumptionAh : d.lastChargeAh - d.triggerAh;
-    document.getElementById('kpiConsumption').innerHTML = consumptionAh.toFixed(2) + '<span class="kpi-unit">Ah</span>';
+    document.getElementById('summaryStatus').textContent = hasRecord ? '本次作业数据' : '暂未接入作业记录';
+    document.getElementById('kpiConsumption').innerHTML = consumptionAh === null ? '--' : consumptionAh.toFixed(2) + '<span class="kpi-unit">Ah</span>';
+    document.getElementById('kpiDuration').innerHTML = durationSec === null ? '--' : durationSec.toLocaleString() + '<span class="kpi-unit">s</span>';
+    if (durationSec === null) {
+      document.getElementById('kpiDurationHMS').textContent = '等待作业开始与结束时间';
+    } else {
+      var h = Math.floor(durationSec / 3600);
+      var m = Math.floor((durationSec % 3600) / 60);
+      var s = Math.floor(durationSec % 60);
+      document.getElementById('kpiDurationHMS').textContent = h + 'h ' + m + 'm ' + s + 's';
+    }
+    document.getElementById('kpiCurrent').innerHTML = avgCurrent === null ? '--' : avgCurrent.toFixed(2) + '<span class="kpi-unit">A</span>';
+    document.getElementById('loadTotal').textContent = tasks.length ? totalWeight.toFixed(2) : '--';
+    document.getElementById('loadRate').textContent = avgRate === null ? '--' : avgRate.toFixed(2);
+    document.getElementById('taskCount').textContent = tasks.length;
+    document.getElementById('taskTableTitle').innerHTML = hasRecord
+      ? '任务明细 · 搬运 <strong style="color:#FFFFFF;font-family:\'Courier New\',monospace;">' + tasks.length + '</strong> 次'
+      : '任务明细 · 暂未接入任务系统';
 
-    // 本次作业时长 (秒) = 开始充电的时间戳 - 上一次结束充电的时间戳
-    var durationSec = d.durationSec !== undefined ? d.durationSec : d.chargeStartTs - d.lastChargeEndTs;
-    var h = Math.floor(durationSec / 3600);
-    var m = Math.floor((durationSec % 3600) / 60);
-    var s = durationSec % 60;
-    document.getElementById('kpiDuration').innerHTML = durationSec.toLocaleString() + '<span class="kpi-unit">s</span>';
-    document.getElementById('kpiDurationHMS').textContent = h + 'h ' + m + 'm ' + s + 's';
-
-    // 平均放电电流 (A) = 消耗电量(Ah) / 作业时长(h)
-    var avgCurrent = d.avgCurrent !== undefined ? d.avgCurrent : consumptionAh / (durationSec / 3600);
-    document.getElementById('kpiCurrent').innerHTML = avgCurrent.toFixed(2) + '<span class="kpi-unit">A</span>';
-
-    // 累计总重 = Σ(单次任务重量)
-    var totalWeight = d.tasks.reduce(function(acc, t) { return acc + t.weight; }, 0);
-    document.getElementById('loadTotal').textContent = totalWeight.toFixed(2);
-
-    // 平均负载率 = Σ(单次任务重量 / 额定最大载重) / 搬运次数 × 100%
-    var sumRate = d.tasks.reduce(function(acc, t) { return acc + t.weight / d.ratedLoad; }, 0);
-    var avgRate = sumRate / d.tasks.length * 100;
-    document.getElementById('loadRate').textContent = avgRate.toFixed(2);
-
-    // 任务数量
-    document.getElementById('taskCount').textContent = d.tasks.length;
-
-    // 任务明细表格
     var tbody = document.getElementById('taskTableBody');
     tbody.innerHTML = '';
-    d.tasks.forEach(function(task, i) {
-      var rate = task.weight / d.ratedLoad * 100;
+    if (!tasks.length) {
+      tbody.innerHTML = '<tr><td class="summary-empty" colspan="5">暂无本次作业记录。连接充电器或任务系统后将自动显示。</td></tr>';
+      return;
+    }
+    tasks.forEach(function(task, i) {
+      var rate = ratedLoad && ratedLoad > 0 ? Number(task.weight) / ratedLoad * 100 : null;
       var cls = rate >= 90 ? 'danger' : rate >= 80 ? 'warn' : '';
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td style="color:#AAAAAA;">' + (i + 1) + '</td>' +
         '<td>' + task.name + '</td>' +
-        '<td>' + task.weight.toFixed(2) + ' kg</td>' +
-        '<td class="load-pct' + (cls ? ' ' + cls : '') + '">' + rate.toFixed(2) + '%</td>' +
-        '<td style="color:#AAAAAA;">' + task.time + '</td>';
+        '<td>' + Number(task.weight).toFixed(2) + ' kg</td>' +
+        '<td class="load-pct' + (cls ? ' ' + cls : '') + '">' + (rate === null ? '--' : rate.toFixed(2) + '%') + '</td>' +
+        '<td style="color:#AAAAAA;">' + (task.time || '--') + '</td>';
       tbody.appendChild(tr);
     });
   }
@@ -940,7 +970,9 @@ function isDemoMode() {
     var metrics = (data.diagnosticMetrics || {}).picoResource;
     var errors = (data.diagnosticMetrics || {}).picoResourceErrors || {};
     if (!metrics) {
-      ['picoCpu', 'picoMemory', 'picoDisk', 'picoGpu', 'picoTemperature', 'picoResourceError'].forEach(function(id) { setText(id, '--'); });
+      setText('picoCpu', '暂未接入');
+      ['picoMemory', 'picoDisk', 'picoGpu', 'picoTemperature'].forEach(function(id) { setText(id, '--'); });
+      setText('picoResourceError', '无资源话题');
       return;
     }
     setText('picoCpu', displayNumber(metrics.cpuUsage, '%'));

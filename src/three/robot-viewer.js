@@ -64,6 +64,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   let robot;
   let grid;
   let animationFrame;
+  let rendering = false;
   let loaded = false;
   let hoveredMeshUuid = '';
   const highlightedMaterials = [];
@@ -280,10 +281,25 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   }
 
   function animate() {
+    if (!rendering) return;
     animationFrame = requestAnimationFrame(animate);
     smoothJointMotion();
     controls?.update();
     renderer?.render(scene, camera);
+  }
+
+  // Pico 背屏性能有限。3D 页面隐藏后继续 60fps 绘制会占满 Firefox
+  // 主线程，使触摸、鼠标和切页操作明显延迟。
+  function resume() {
+    if (rendering || !renderer) return;
+    rendering = true;
+    animate();
+  }
+
+  function pause() {
+    rendering = false;
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = null;
   }
 
   function initialize() {
@@ -349,21 +365,22 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
 
     window.addEventListener('resize', resize);
     resize();
-    animate();
+    resume();
   }
 
   function open() {
     initialize();
+    resume();
     requestAnimationFrame(resize);
   }
 
   function destroy() {
-    if (animationFrame) cancelAnimationFrame(animationFrame);
+    pause();
     window.removeEventListener('resize', resize);
     renderer?.domElement.removeEventListener('pointermove', showTooltip);
     renderer?.domElement.removeEventListener('pointerleave', hideTooltip);
     renderer?.dispose();
   }
 
-  return { open, resetView, toggleOption, setFaults, updateJointPositions, destroy, get loaded() { return loaded; } };
+  return { open, pause, resume, resetView, toggleOption, setFaults, updateJointPositions, destroy, get loaded() { return loaded; } };
 }

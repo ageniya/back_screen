@@ -137,10 +137,10 @@
           &#x1F504; 一键诊断
         </button>
         <button class="btn btn-danger" id="btnFaultClear" onclick="clearFault()">
-          &#x2715; 故障清除
+          &#x2713; 确认已恢复
         </button>
-        <button class="btn btn-stop" onclick="softEmergencyStop()">
-          &#x26D4; 急停
+        <button class="btn btn-stop" id="btnSoftStop" disabled title="软件停止尚未启用，请使用机器人实体急停按钮">
+          &#x26D4; 软件停止未启用
         </button>
       </div>
 
@@ -189,8 +189,8 @@
     <!-- Tab: 作业总结 -->
     <div class="tab-content summary-page" id="tab-detail" style="display:none;">
       <div class="summary-header">
-        <span>作业总结</span>
-        <span style="font-size:11px;color:#AAAAAA;font-weight:400;">充电循环 #12</span>
+        <span>本次作业记录</span>
+        <span class="summary-status" id="summaryStatus">等待作业数据</span>
       </div>
       <!-- KPI Row: 电量 · 时长 · 电流 -->
       <div class="summary-kpi-row">
@@ -221,7 +221,7 @@
       </div>
       <!-- Task Table -->
       <div class="summary-table-box">
-        <div class="summary-table-title">任务明细 · 搬运 <strong style="color:#FFFFFF;font-family:'Courier New',monospace;" id="taskCount">0</strong> 次</div>
+        <div class="summary-table-title" id="taskTableTitle">任务明细 · 搬运 <strong style="color:#FFFFFF;font-family:'Courier New',monospace;" id="taskCount">0</strong> 次</div>
         <div class="summary-table-wrap">
           <table class="summary-table">
             <thead>
