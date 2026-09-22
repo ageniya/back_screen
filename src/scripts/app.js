@@ -906,6 +906,30 @@ function isDemoMode() {
     return String(value) + (suffix || '');
   }
 
+  function setBatteryRowLabels(labels) {
+    labels.forEach(function(label, index) { setText('batteryLabel' + (index + 1), label); });
+  }
+
+  function renderBatteryOrSystemResource(data, battery) {
+    var hasBattery = Object.values(battery || {}).some(function(value) { return value !== null && value !== undefined && value !== ''; });
+    if (hasBattery) {
+      setBatteryRowLabels(['电量', '电压', '电流', '温度', '单体', '状态', '循环']);
+      return;
+    }
+    // 当前 Orin 没有电池消息时，展示已真实收到的计算单元资源，而不是一排 --。
+    var metrics = (data.diagnosticMetrics || {}).systemResource;
+    if (!metrics) return;
+    var errors = (data.diagnosticMetrics || {}).systemResourceErrors || {};
+    setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
+    setText('batteryLevel', displayValue(metrics.cpuUsage, '%'));
+    setText('batteryVoltage', displayValue(metrics.memoryUsage));
+    setText('batteryCurrent', displayValue(metrics.diskUsage));
+    setText('batteryTemperature', displayValue(metrics.gpuUsage, '%'));
+    setText('cellVoltage', displayValue(metrics.temperature, '°C'));
+    setText('chargeStatus', Object.keys(errors).some(function(key) { return errors[key] === true; }) ? '存在告警' : '正常');
+    setText('chargeCycles', 'Orin');
+  }
+
   function applySnapshot(data) {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     data = normalizeSnapshot(data);
@@ -922,6 +946,7 @@ function isDemoMode() {
     setText('batteryLevel', displayValue(battery.percent, '%')); setText('batteryTop', displayValue(battery.percent, '%'));
     setText('batteryVoltage', displayValue(battery.voltage, 'V')); setText('batteryCurrent', displayValue(battery.current, 'A'));
     setText('batteryTemperature', displayValue(battery.temperature, '°C')); setText('cellVoltage', displayValue(battery.cellVoltage, 'V')); setText('chargeStatus', displayValue(battery.chargeStatus)); setText('chargeCycles', displayValue(battery.cycles));
+    renderBatteryOrSystemResource(data, battery);
     var joints = motion.joints || data.joints || [];
     for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(1) + '°' : displayValue(jointValue)); }
     setText('payload', displayValue(data.payloadKg, 'kg'));
