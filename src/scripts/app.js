@@ -832,12 +832,14 @@ function isDemoMode() {
 
   setDataSourceState(ROBOT_DATA_ADAPTER || ROBOT_API_BASE ? 'connecting' : 'demo');
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) document.getElementById('demoEntry').style.display = 'none';
-  var localLogs = [
+  // 演示模式保留样例日志；接口模式只能展示后端收到的真实 ROS 日志，不能
+  // 用这些示例内容冒充实机记录。
+  var localLogs = isDemoMode() ? [
     { time: '15:42:18', type: 'fault', label: '故障', text: 'F001 左臂电机温度过高，已触发安全策略', source: '诊断引擎' },
     { time: '15:38:05', type: 'warn', label: '警告', text: 'W014 核心节点通信延迟波动', source: '网络模块' },
     { time: '15:31:44', type: 'info', label: '提示', text: '电量低于建议值，建议任务结束后充电', source: '电池管理' },
     { time: '15:20:10', type: 'info', label: '信息', text: '作业任务 #A-1208 已开始', source: '任务模块' }
-  ];
+  ] : [];
 
   function renderLogs() {
     var list = document.getElementById('logList');
@@ -845,6 +847,29 @@ function isDemoMode() {
     list.innerHTML = localLogs.map(function(log) {
       return '<div class="log-item"><span class="log-time">' + log.time + '</span><span class="log-tag ' + log.type + '">' + log.label + '</span><span>' + log.text + '</span><span style="color:#AAAAAA;font-size:11px;">' + log.source + '</span></div>';
     }).join('');
+  }
+
+  function applyLogs(data) {
+    var payload = data && data.data ? data.data : data;
+    if (!Array.isArray(payload)) return;
+    localLogs = payload.map(function(log) {
+      var type = ['info', 'warn', 'fault'].indexOf(log.type) >= 0 ? log.type : 'info';
+      return {
+        time: displayValue(log.time),
+        type: type,
+        label: displayValue(log.label),
+        text: displayValue(log.text),
+        source: displayValue(log.source)
+      };
+    }).slice(0, 200);
+    renderLogs();
+  }
+
+  function requestLogs() {
+    var request;
+    if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getLogs === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getLogs());
+    else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/history').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
+    if (request) request.then(applyLogs).catch(function() { /* 保留上一次真实日志，不写入演示日志。 */ });
   }
 
   function applyWorkSummary(data) {
@@ -1001,10 +1026,12 @@ function isDemoMode() {
     requestBackendHealth();
     requestSnapshot();
     requestAlarms();
+    requestLogs();
     setInterval(requestBackendHealth, 1000);
     // 实机快照和告警都按 1Hz 获取；3D 视图会在两次快照之间自行平滑过渡。
     setInterval(requestSnapshot, 1000);
     setInterval(requestAlarms, 1000);
+    setInterval(requestLogs, 2000);
   }
 
   // HTML touch handlers intentionally use these stable global entry points.
