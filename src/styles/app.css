@@ -132,6 +132,8 @@
     gap: 18px;
     font-size: 13px;
     font-family: 'Courier New', monospace;
+    white-space: nowrap;
+    overflow: hidden;
   }
   .battery-row .batt-label { color: #AAAAAA; }
   .battery-row .batt-value { color: #52C41A; }
