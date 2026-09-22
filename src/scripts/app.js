@@ -140,17 +140,19 @@ function isDemoMode() {
     btn.disabled = true;
     btn.innerHTML = '&#x23F3; 诊断中...';
     setTimeout(function() {
-      btn.disabled = false;
-      btn.innerHTML = '&#x2705; 诊断完成';
       if (isDemoMode()) {
+        btn.disabled = false;
+        btn.innerHTML = '&#x2705; 诊断完成';
         addDemoAlert('warning');
         addLog('info', '诊断', '演示诊断已完成，并注入一条模拟告警', '演示控制');
+        setTimeout(function() { btn.innerHTML = '&#x1F504; 一键诊断'; }, 2000);
       } else {
-        invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断');
+        invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断').then(function(success) {
+          btn.disabled = false;
+          btn.innerHTML = success ? '&#x2705; 已请求诊断' : '&#x26A0; 诊断未接入';
+          setTimeout(function() { btn.innerHTML = '&#x1F504; 一键诊断'; }, 2000);
+        });
       }
-      setTimeout(function() {
-        btn.innerHTML = '&#x1F504; 一键诊断';
-      }, 2000);
     }, 3000);
   }
 
@@ -905,6 +907,15 @@ function isDemoMode() {
 
   function requestSnapshot() {
     var request;
+    // 接口模式不能保留 HTML 里的演示初始值。正式数据尚未到来时，先明确显示
+    // “--”，避免把示例数字误认成机器人实时状态。
+    if (latestRobotSnapshot === null && (ROBOT_DATA_ADAPTER || ROBOT_API_BASE)) {
+      applySnapshot({
+        health: { level: 'info', label: '等待 ROS 数据', alertCount: 0 },
+        motion: { position: null, target: null, speed: null, leftTcp: null, rightTcp: null, joints: [], jointPositions: {} },
+        battery: {}, sensors: {}, network: {}
+      });
+    }
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.getSnapshot === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.getSnapshot());
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
     else return;
@@ -973,7 +984,14 @@ function isDemoMode() {
     if (ROBOT_DATA_ADAPTER && typeof ROBOT_DATA_ADAPTER.sendCommand === 'function') request = Promise.resolve(ROBOT_DATA_ADAPTER.sendCommand(path, body || {}));
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) }).then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
     else { alert('未接入实机控制接口。演示模式下不会发送控制命令。'); return Promise.resolve(false); }
-    return request.then(function() { addLog('info', '命令', successText, '背部屏幕'); return true; }).catch(function() { alert('命令未执行，请检查实机连接和权限。'); return false; });
+    return request.then(function(result) {
+      if (result && result.accepted === false) {
+        alert(result.message || '命令未执行：对应实机服务尚未接入。');
+        return false;
+      }
+      addLog('info', '命令', successText, '背部屏幕');
+      return true;
+    }).catch(function() { alert('命令未执行，请检查实机连接和权限。'); return false; });
   }
 
   function softEmergencyStop() { if (confirm('确认急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求急停'); }
