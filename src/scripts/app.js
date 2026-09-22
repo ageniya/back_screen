@@ -927,7 +927,11 @@ function isDemoMode() {
     setText('payload', displayValue(data.payloadKg, 'kg'));
     setText('gripForce', displayValue(data.gripForceN, 'N'));
     setText('operationMode', displayValue(data.operationMode));
-    setText('networkIp', data.network && data.network.ip ? 'IP ' + data.network.ip : 'IP --');
+    var network = data.network || {};
+    var ipText = [];
+    if (network.ip) ipText.push('Orin ' + network.ip);
+    if (network.picoIp) ipText.push('Pico ' + network.picoIp);
+    setText('networkIp', ipText.length ? ipText.join(' · ') : 'IP --');
     setText('alertCount', displayValue(health.alertCount)); setText('alertBannerCount', displayValue(health.alertCount));
     var sensorFault = false;
     if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var sensorState = data.sensors[sensorNames[index]]; var stateClass = sensorVisualState(sensorNames[index], sensorState); if (stateClass === 'red') sensorFault = true; dot.className = 'sensor-dot ' + stateClass; }); }
