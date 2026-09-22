@@ -940,7 +940,9 @@ function isDemoMode() {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     data = normalizeSnapshot(data);
     latestRobotSnapshot = data;
-    renderRobot3DDataPanels();
+    // 3D 页面未打开时不重建隐藏的信息卡片，避免状态页刷新时产生额外布局开销。
+    var robot3dPage = document.getElementById('robot3dView');
+    if (robot3dPage && robot3dPage.style.display !== 'none') renderRobot3DDataPanels();
     if (robot3dViewer) robot3dViewer.updateJointPositions(data);
     var health = data.health || {};
     var motion = data.motion || {}, battery = data.battery || {};
@@ -1069,11 +1071,12 @@ function isDemoMode() {
     requestSnapshot();
     requestAlarms();
     requestLogs();
-    setInterval(requestBackendHealth, 1000);
+    // 健康状态不是高频运动数据，降低轮询频率，给触摸和页面渲染留出余量。
+    setInterval(requestBackendHealth, 3000);
     // 实机快照和告警都按 1Hz 获取；3D 视图会在两次快照之间自行平滑过渡。
     setInterval(requestSnapshot, 1000);
-    setInterval(requestAlarms, 1000);
-    setInterval(requestLogs, 2000);
+    setInterval(requestAlarms, 2000);
+    setInterval(requestLogs, 5000);
   }
 
   // HTML touch handlers intentionally use these stable global entry points.
