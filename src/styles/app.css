@@ -135,6 +135,7 @@
     white-space: nowrap;
     overflow: hidden;
   }
+  .resource-row { gap: 12px; font-size: 12px; }
   .battery-row .batt-label { color: #AAAAAA; }
   .battery-row .batt-value { color: #52C41A; }
   .battery-row .batt-divider { color: #333333; }

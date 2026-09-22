@@ -109,6 +109,18 @@
         <span><span class="batt-label" id="batteryLabel7">循环</span> <span class="batt-value" id="chargeCycles">12</span></span>
       </div>
 
+      <!-- Orin/Pico resource comparison; Pico remains -- until its resource topic publishes. -->
+      <div class="card battery-row resource-row" id="picoResourceRow">
+        <span><span class="batt-label">Pico CPU</span> <span class="batt-value" id="picoCpu">--</span></span>
+        <span class="batt-divider">|</span>
+        <span><span class="batt-label">内存</span> <span class="batt-value" id="picoMemory">--</span></span>
+        <span><span class="batt-label">磁盘</span> <span class="batt-value" id="picoDisk">--</span></span>
+        <span class="batt-divider">|</span>
+        <span><span class="batt-label">GPU</span> <span class="batt-value" id="picoGpu">--</span></span>
+        <span><span class="batt-label">温度</span> <span class="batt-value" id="picoTemperature">--</span></span>
+        <span><span class="batt-label">资源告警</span> <span class="batt-value" id="picoResourceError">--</span></span>
+      </div>
+
       <!-- Row 5: Sensor Status -->
       <div class="card sensor-row" id="sensorRow">
         <span class="sensor-item"><span class="sensor-dot green"></span>激光雷达</span>

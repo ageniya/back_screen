@@ -936,6 +936,21 @@ function isDemoMode() {
     setText('chargeCycles', 'Orin');
   }
 
+  function renderPicoResource(data) {
+    var metrics = (data.diagnosticMetrics || {}).picoResource;
+    var errors = (data.diagnosticMetrics || {}).picoResourceErrors || {};
+    if (!metrics) {
+      ['picoCpu', 'picoMemory', 'picoDisk', 'picoGpu', 'picoTemperature', 'picoResourceError'].forEach(function(id) { setText(id, '--'); });
+      return;
+    }
+    setText('picoCpu', displayNumber(metrics.cpuUsage, '%'));
+    setText('picoMemory', displayNumber(metrics.memoryUsage));
+    setText('picoDisk', displayNumber(metrics.diskUsage));
+    setText('picoGpu', displayNumber(metrics.gpuUsage, '%'));
+    setText('picoTemperature', displayNumber(metrics.temperature, '°C'));
+    setText('picoResourceError', Object.keys(errors).some(function(key) { return errors[key] === true; }) ? '存在告警' : '正常');
+  }
+
   function applySnapshot(data) {
     // Expected snapshot: health, motion, battery, sensors and optional network fields.
     data = normalizeSnapshot(data);
@@ -955,6 +970,7 @@ function isDemoMode() {
     setText('batteryVoltage', displayNumber(battery.voltage, 'V')); setText('batteryCurrent', displayNumber(battery.current, 'A'));
     setText('batteryTemperature', displayNumber(battery.temperature, '°C')); setText('cellVoltage', displayNumber(battery.cellVoltage, 'V')); setText('chargeStatus', displayValue(battery.chargeStatus)); setText('chargeCycles', displayNumber(battery.cycles));
     renderBatteryOrSystemResource(data, battery);
+    renderPicoResource(data);
     var joints = motion.joints || data.joints || [];
     for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(2) + '°' : displayValue(jointValue)); }
     setText('payload', displayNumber(data.payloadKg, 'kg'));
