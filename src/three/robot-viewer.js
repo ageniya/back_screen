@@ -214,7 +214,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     const fault = faultByJoint.get(jointName);
     const isLinear = joint.jointType === 'prismatic';
     const value = typeof joint.angle === 'number'
-      ? (isLinear ? `${joint.angle.toFixed(3)} m` : `${THREE.MathUtils.radToDeg(joint.angle).toFixed(1)}°`)
+      ? (isLinear ? `${joint.angle.toFixed(2)} m` : `${THREE.MathUtils.radToDeg(joint.angle).toFixed(2)}°`)
       : '固定连接';
     const stateClass = fault ? severityClass(fault.level) ? 'tooltip-warning' : 'tooltip-critical' : 'tooltip-normal';
     const stateText = fault ? `${fault.level === 'warning' || fault.level === 'info' ? '警告' : '异常'}：${fault.message || fault.title || '请检查'}` : '状态正常';

@@ -386,7 +386,7 @@ function isDemoMode() {
     for (var i = 0; i < 5; i++) {
       var val = min + (max - min) * (1 - i / 4);
       var ly = top + plotH * i / 4 + 3;
-      ctx.fillText(Number.isInteger(val) ? val : val.toFixed(1), left - 5, ly);
+      ctx.fillText(Number(val).toFixed(2), left - 5, ly);
     }
 
     ctx.textAlign = 'left'; ctx.fillText('-' + (values.length - 1) + 's', left, h - 5);
@@ -591,7 +591,7 @@ function isDemoMode() {
       var positions = motion.jointPositions || {};
       var entries = Object.entries(positions).slice(0, 6);
       rows = entries.length ? entries.map(function(entry) {
-        return [entry[0], (Number(entry[1]) * 180 / Math.PI).toFixed(1) + '°'];
+        return [entry[0], (Number(entry[1]) * 180 / Math.PI).toFixed(2) + '°'];
       }) : (motion.joints || []).slice(0, 6).map(function(value, index) { return ['J' + (index + 1), value]; });
     } else if (view === 'battery') {
       title = '电池状态';
@@ -754,12 +754,12 @@ function isDemoMode() {
 
     // 累计总重 = Σ(单次任务重量)
     var totalWeight = d.tasks.reduce(function(acc, t) { return acc + t.weight; }, 0);
-    document.getElementById('loadTotal').textContent = totalWeight.toFixed(1);
+    document.getElementById('loadTotal').textContent = totalWeight.toFixed(2);
 
     // 平均负载率 = Σ(单次任务重量 / 额定最大载重) / 搬运次数 × 100%
     var sumRate = d.tasks.reduce(function(acc, t) { return acc + t.weight / d.ratedLoad; }, 0);
     var avgRate = sumRate / d.tasks.length * 100;
-    document.getElementById('loadRate').textContent = avgRate.toFixed(1);
+    document.getElementById('loadRate').textContent = avgRate.toFixed(2);
 
     // 任务数量
     document.getElementById('taskCount').textContent = d.tasks.length;
@@ -774,8 +774,8 @@ function isDemoMode() {
       tr.innerHTML =
         '<td style="color:#AAAAAA;">' + (i + 1) + '</td>' +
         '<td>' + task.name + '</td>' +
-        '<td>' + task.weight.toFixed(1) + ' kg</td>' +
-        '<td class="load-pct' + (cls ? ' ' + cls : '') + '">' + rate.toFixed(1) + '%</td>' +
+        '<td>' + task.weight.toFixed(2) + ' kg</td>' +
+        '<td class="load-pct' + (cls ? ' ' + cls : '') + '">' + rate.toFixed(2) + '%</td>' +
         '<td style="color:#AAAAAA;">' + task.time + '</td>';
       tbody.appendChild(tr);
     });
@@ -906,6 +906,12 @@ function isDemoMode() {
     return String(value) + (suffix || '');
   }
 
+  function displayNumber(value, suffix) {
+    if (value === undefined || value === null || value === '') return '--';
+    var number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(2) + (suffix || '') : String(value) + (suffix || '');
+  }
+
   function setBatteryRowLabels(labels) {
     labels.forEach(function(label, index) { setText('batteryLabel' + (index + 1), label); });
   }
@@ -921,11 +927,11 @@ function isDemoMode() {
     if (!metrics) return;
     var errors = (data.diagnosticMetrics || {}).systemResourceErrors || {};
     setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
-    setText('batteryLevel', displayValue(metrics.cpuUsage, '%'));
-    setText('batteryVoltage', displayValue(metrics.memoryUsage));
-    setText('batteryCurrent', displayValue(metrics.diskUsage));
-    setText('batteryTemperature', displayValue(metrics.gpuUsage, '%'));
-    setText('cellVoltage', displayValue(metrics.temperature, '°C'));
+    setText('batteryLevel', displayNumber(metrics.cpuUsage, '%'));
+    setText('batteryVoltage', displayNumber(metrics.memoryUsage));
+    setText('batteryCurrent', displayNumber(metrics.diskUsage));
+    setText('batteryTemperature', displayNumber(metrics.gpuUsage, '%'));
+    setText('cellVoltage', displayNumber(metrics.temperature, '°C'));
     setText('chargeStatus', Object.keys(errors).some(function(key) { return errors[key] === true; }) ? '存在告警' : '正常');
     setText('chargeCycles', 'Orin');
   }
@@ -943,14 +949,14 @@ function isDemoMode() {
     // 老接口只有 tcp 时不猜测它属于哪一只手；左右手字段齐全后才展示实时值。
     setText('leftTcpPosition', displayValue(motion.leftTcp)); setText('rightTcpPosition', displayValue(motion.rightTcp));
     setText('uptime', displayValue(data.uptime)); setText('remainingTime', displayValue(battery.remainingMinutes, 'm'));
-    setText('batteryLevel', displayValue(battery.percent, '%')); setText('batteryTop', displayValue(battery.percent, '%'));
-    setText('batteryVoltage', displayValue(battery.voltage, 'V')); setText('batteryCurrent', displayValue(battery.current, 'A'));
-    setText('batteryTemperature', displayValue(battery.temperature, '°C')); setText('cellVoltage', displayValue(battery.cellVoltage, 'V')); setText('chargeStatus', displayValue(battery.chargeStatus)); setText('chargeCycles', displayValue(battery.cycles));
+    setText('batteryLevel', displayNumber(battery.percent, '%')); setText('batteryTop', displayNumber(battery.percent, '%'));
+    setText('batteryVoltage', displayNumber(battery.voltage, 'V')); setText('batteryCurrent', displayNumber(battery.current, 'A'));
+    setText('batteryTemperature', displayNumber(battery.temperature, '°C')); setText('cellVoltage', displayNumber(battery.cellVoltage, 'V')); setText('chargeStatus', displayValue(battery.chargeStatus)); setText('chargeCycles', displayNumber(battery.cycles));
     renderBatteryOrSystemResource(data, battery);
     var joints = motion.joints || data.joints || [];
-    for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(1) + '°' : displayValue(jointValue)); }
-    setText('payload', displayValue(data.payloadKg, 'kg'));
-    setText('gripForce', displayValue(data.gripForceN, 'N'));
+    for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(2) + '°' : displayValue(jointValue)); }
+    setText('payload', displayNumber(data.payloadKg, 'kg'));
+    setText('gripForce', displayNumber(data.gripForceN, 'N'));
     setText('operationMode', displayValue(data.operationMode));
     var network = data.network || {};
     var ipText = [];
