@@ -795,7 +795,9 @@ function isDemoMode() {
       demo: ROBOT_API_BASE ? '后端模拟数据' : '本地演示数据',
       connecting: '接口连接中',
       waiting: '等待实机数据',
-      connected: ROBOT_DATA_ADAPTER ? '本地数据' : '实机数据',
+      // ROS 已连接只代表收到了某一路 ROS 消息；是否为完整实机数据要看
+      // /healthz 的 activeSources，不能在背屏上笼统标成“实机数据”。
+      connected: ROBOT_DATA_ADAPTER ? '本地数据' : 'ROS 数据',
       offline: '接口离线'
     };
     el.className = 'data-source ' + state;
