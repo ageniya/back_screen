@@ -580,7 +580,7 @@ function isDemoMode() {
   }
 
   function getRobot3DDataPanel(view, data) {
-    var motion = data.motion || {}, battery = data.battery || {}, sensors = data.sensors || {};
+    var motion = data.motion || {}, battery = data.battery || {}, sensors = data.sensors || {}, hands = data.hands || {}, wristForces = data.wristForces || {};
     var rows = [];
     var title = '';
     if (view === 'motion') {
@@ -601,6 +601,13 @@ function isDemoMode() {
       rows = [['激光雷达', sensors.lidar], ['深度相机', sensors.depthCamera], ['六维力', sensors.forceSensor], ['碰撞条', sensors.bumper], ['摄像头', sensors.camera], ['网络', sensors.network]].map(function(item) {
         var state = sensorVisualState(item[0] === '碰撞条' ? 'bumper' : 'sensor', item[1]);
         return [item[0], state === 'green' ? '正常' : state === 'yellow' ? '已触发' : state === 'red' ? '离线' : '未知', state];
+      });
+      ['left', 'right'].forEach(function(side) {
+        var force = wristForces[side] && wristForces[side].force;
+        var joints = hands[side] && hands[side].jointPositions;
+        var sideLabel = side === 'left' ? '左' : '右';
+        if (force && force.x !== null && force.y !== null && force.z !== null) rows.push([sideLabel + '腕力', 'X' + Number(force.x).toFixed(2) + ' Y' + Number(force.y).toFixed(2) + ' Z' + Number(force.z).toFixed(2) + ' N']);
+        if (joints && Object.keys(joints).length) rows.push([sideLabel + '手关节', Object.keys(joints).length + ' 个实时数据']);
       });
     }
     return { title: title, rows: rows };
