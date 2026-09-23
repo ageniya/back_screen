@@ -980,7 +980,7 @@ function isDemoMode() {
     if (!hasMetrics) {
       setText('picoCpu', '暂未接入');
       ['picoMemory', 'picoDisk', 'picoGpu', 'picoTemperature'].forEach(function(id) { setText(id, '--'); });
-      setText('picoResourceError', '无资源话题');
+      setText('picoResourceError', '--');
       setText('picoResourceSource', '--');
       return;
     }
