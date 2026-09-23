@@ -14,7 +14,7 @@ MONITOR_HTML = r"""<!doctype html>
   </style>
 </head>
 <body><main>
-  <div class="head"><div><h1>机器人背屏 · 实时数据监控</h1><div class="sub">这是只读监控页，不控制机器人。刷新帧号递增即表示页面正在自动请求后端；<a href="/docs" style="color:#69b1ff">/docs</a> 仅用于单次接口测试。</div></div><div id="connection" class="badge wait">正在连接</div></div>
+  <div class="head"><div><h1>机器人背屏 · 实时数据监控</h1><div class="sub">这是只读监控页，不控制机器人。每 5 秒自动请求一次后端；<a href="/docs" style="color:#69b1ff">/docs</a> 仅用于单次接口测试。</div></div><div id="connection" class="badge wait">正在连接</div></div>
   <div class="tabs"><button class="tab active" data-page="orin">Orin 数据</button><button class="tab" data-page="pico">Pico 数据</button></div>
   <div id="orin" class="page active"><div id="orinContent"></div></div>
   <div id="pico" class="page"><div id="picoContent"></div></div>
@@ -66,11 +66,11 @@ MONITOR_HTML = r"""<!doctype html>
       frame++;var health=values[0],snapshot=values[1],alarms=values[2],badge=document.getElementById('connection');
       badge.className='badge '+(health.dataReady?'ok':'wait');badge.textContent=health.dataReady?'第 '+frame+' 帧 · 正在接收':'第 '+frame+' 帧 · 等待 ROS 数据';
       renderOrin(health,snapshot,alarms);renderPico(health,snapshot);
-      document.getElementById('updated').textContent='最后成功刷新：'+new Date().toLocaleTimeString()+' · 每秒一次 · 第 '+frame+' 帧';
+      document.getElementById('updated').textContent='最后成功刷新：'+new Date().toLocaleTimeString()+' · 每 5 秒一次 · 第 '+frame+' 帧';
     }catch(error){var badge=document.getElementById('connection');badge.className='badge error';badge.textContent='接口不可用';document.getElementById('updated').textContent='最后请求失败：'+new Date().toLocaleTimeString();}
     finally{fetching=false;}
   }
   Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(button){button.addEventListener('click',function(){Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('active',el===button);});Array.prototype.forEach.call(document.querySelectorAll('.page'),function(el){el.classList.toggle('active',el.id===button.dataset.page);});});});
-  refresh();setInterval(refresh,1000);
+  refresh();setInterval(refresh,5000);
 }());
 </script></body></html>"""
