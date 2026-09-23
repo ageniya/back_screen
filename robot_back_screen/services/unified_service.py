@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import uuid
+import os
+import time
 from typing import Any
 
 from robot_back_screen.clients.diagnosis_engine import MockDiagnosisEngine, WebSocketDiagnosisEngine, now_text
@@ -23,6 +25,11 @@ class UnifiedDiagnosticsService:
         # 没有接入独立诊断引擎时，一键诊断仍可基于已收到的遥测数据
         # 进行只读检查。结果只保存在内存中，下一次检查会用新结果覆盖。
         self._builtin_alarms: list[dict[str, Any]] = []
+        # 瞬时 CPU 波动、网络重连等不应打扰现场用户。告警必须持续一段
+        # 时间才进入前端；恢复后的告警则立即从当前列表移除。
+        self._alarm_persist_seconds = float(os.getenv("ALARM_PERSIST_SECONDS", "5"))
+        self._pending_alarm_since: dict[str, float] = {}
+        self._visible_alarm_ids: set[str] = set()
 
     @staticmethod
     def _items(response: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -144,7 +151,23 @@ class UnifiedDiagnosticsService:
         unique: dict[str, dict[str, Any]] = {}
         for alarm in combined:
             unique[str(alarm.get("id", uuid.uuid4()))] = alarm
-        return list(unique.values())
+        now = time.monotonic()
+        current_ids = set(unique)
+        self._visible_alarm_ids.intersection_update(current_ids)
+        for alarm_id in list(self._pending_alarm_since):
+            if alarm_id not in current_ids:
+                self._pending_alarm_since.pop(alarm_id, None)
+
+        visible = []
+        for alarm_id, alarm in unique.items():
+            if alarm_id in self._visible_alarm_ids:
+                visible.append(alarm)
+                continue
+            first_seen = self._pending_alarm_since.setdefault(alarm_id, now)
+            if now - first_seen >= self._alarm_persist_seconds:
+                self._visible_alarm_ids.add(alarm_id)
+                visible.append(alarm)
+        return visible
 
     async def _current_snapshot(self) -> dict[str, Any]:
         """Collect the same combined Pico/Orin state used by the status page."""
