@@ -141,8 +141,9 @@
     align-items: center;
     gap: 10px;
     font-size: 12px;
+    width: 100%;
   }
-  .resource-row > span { min-width: 0; }
+  .resource-row > span { min-width: 0; white-space: nowrap; }
   .resource-row .batt-divider { display: none; }
   .battery-row .batt-label { color: #AAAAAA; }
   .battery-row .batt-value { color: #52C41A; }

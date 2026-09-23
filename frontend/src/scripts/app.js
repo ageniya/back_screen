@@ -963,7 +963,7 @@ function isDemoMode() {
     }
     if (orinResourceRow) orinResourceRow.classList.add('resource-row');
     var errors = (data.diagnosticMetrics || {}).systemResourceErrors || {};
-    setBatteryRowLabels(['Orin CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
+    setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
     setText('batteryLevel', displayNumber(metrics.cpuUsage, '%'));
     setText('batteryVoltage', displayNumber(metrics.memoryUsage));
     setText('batteryCurrent', displayNumber(metrics.diskUsage));
