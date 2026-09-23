@@ -1,0 +1,1 @@
+"""Unified robot diagnostics service."""

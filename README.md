@@ -1,56 +1,70 @@
-# R1 Robot Back Screen
+# 机器人背屏（统一交付包）
 
-1024 × 600 touch-oriented local diagnostic screen. The project uses Vite for development and production builds, while retaining a dependency-light browser UI.
+这是随机器人中间件一起交付的 ROS2 软件包。它把三件事放进同一次版本管理和 `.deb` 升级中：
 
-## Run
+```text
+ROS2 真实话题
+    ↓
+robot_back_screen/        Python 后端：订阅、整理、诊断、HTTP API
+    ↓ 同一服务
+frontend/                 背屏网页：状态、告警、日志、作业总结、3D 视图
+```
+
+生产环境只需启动 **一个服务**：`robot-back-screen-api`。它既提供 API（`/api/v1/...`），也提供背屏页面（`/`）；不再需要在机器人上运行 `npm run dev` 或额外的 5173 端口。
+
+## 目录
+
+| 目录 | 用途 |
+| --- | --- |
+| `robot_back_screen/` | Python 后端主体，订阅 Pico/Orin ROS2 话题并提供 API。 |
+| `frontend/` | 前端源码；仅开发与构建时需要 Node.js。 |
+| `docs/` | API 契约、架构和 ROS 字段映射。 |
+| `launch/` | ROS2 启动入口。 |
+| `deploy/` | systemd、构建和 Pico 屏幕启动示例。 |
+| `package.xml`、`setup.py` | ROS2/ament 打包定义。 |
+
+## 本机开发
+
+前端：
 
 ```bash
-cd "/home/wangyulong/桌面/back_screen/robot-back-screen"
+cd frontend
 npm install
 npm run dev
 ```
 
-Open the address printed by Vite (normally `http://localhost:5173`). It will display stable offline example data until a local diagnostic service is configured.
-
-To create deployment files:
+后端：
 
 ```bash
-npm run build
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn robot_back_screen.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The generated `dist/` directory can be copied to the back-screen device's web server. See [the project architecture](docs/ARCHITECTURE.md) for the source layout.
+开发联调时打开：
 
-## Connect to the real robot
-
-The page does not prescribe a diagnostic-system architecture. It accepts an existing ROS2 bridge, SDK wrapper, or HTTP service through `window.ROBOT_DATA_ADAPTER`.
-
-Before `index.html`'s main script, the deployment can inject an adapter:
-
-```html
-<script>
-window.ROBOT_DATA_ADAPTER = {
-  getSnapshot: () => existingRobotBridge.getSnapshot(),
-  getAlarms: () => existingRobotBridge.getAlarms(),
-  getWorkSummary: () => existingRobotBridge.getWorkSummary(),
-  sendCommand: (path, body) => existingRobotBridge.sendCommand(path, body)
-};
-</script>
+```text
+http://127.0.0.1:5173/?api=http://127.0.0.1:8000/api/v1
 ```
 
-`getSnapshot()` is called at 1 Hz. It should provide health, pose/velocity, joint values, payload, battery, network and sensor fields. The top-left model can be supplied as `robotModel` or `identity.model`. `getWorkSummary()` supplies the current charge-cycle's 搬运记录、负载和续航消耗。
+后端接口说明：`http://127.0.0.1:8000/docs`；自动刷新的真实数据页：`http://127.0.0.1:8000/monitor`。
 
-For a deployment that already exposes HTTP, the fallback is:
+## 机器人交付
 
-```html
-<script>window.ROBOT_DIAGNOSTIC_API = 'http://127.0.0.1:8080/api/v1';</script>
-```
+1. 将本仓库放入机器人中间件工作空间的 `src/robot_back_screen`。
+2. 在 `frontend/` 执行 `npm ci && npm run build`，生成发布网页。
+3. 在工作空间执行 `colcon build --packages-select robot_back_screen`，再由中间件发布流程制作 `.deb`。
+4. 机器人安装 `.deb` 后，以 `ros2 launch robot_back_screen back_screen.launch.py` 或 systemd 启动。
+5. Pico 浏览器打开 `http://127.0.0.1:8000/`。
 
-| Screen action | API request |
-| --- | --- |
-| Refresh status | `GET /robot/snapshot` |
-| One-key diagnosis | `POST /commands/diagnose` |
-| Confirm recovered alarm | `POST /alarms/:id/acknowledge` |
-| Clear recovered alarms | `POST /alarms/clear-recovered` |
-| Soft stop | `POST /commands/soft-stop` |
+实机必须在启动服务前加载对应机器人的 ROS2 环境，并在 `/etc/robot-back-screen/env` 配置 `TELEMETRY_MODE=ros`、Orin 地址等变量。示例见 [.env.example](.env.example)。
 
-`GET /robot/snapshot` is polled at 1 Hz. Command APIs must return a command receipt and must never treat an HTTP request alone as a successful safety action.
+> 急停属于安全功能。当前后端默认 `ROS_ENABLE_CONTROL=false`，不会因网页点击而直接控制实机；任何开放控制的改动都必须走安全评审。
+
+## 相关文档
+
+- [系统结构](docs/ARCHITECTURE.md)
+- [前后端接口契约](docs/ROBOT_API_CONTRACT.md)
+- [后端小白指南](docs/backend/BACKEND_GUIDE.md)
+- [ROS 主分支字段映射](docs/backend/ROS_MAIN_FIELD_MAPPING.md)

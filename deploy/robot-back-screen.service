@@ -1,0 +1,15 @@
+[Unit]
+Description=Robot back-screen data service
+After=network-online.target
+
+[Service]
+Type=simple
+User=nav01
+WorkingDirectory=/opt/ros/humble
+EnvironmentFile=-/etc/robot-back-screen/env
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && exec robot-back-screen-api'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
