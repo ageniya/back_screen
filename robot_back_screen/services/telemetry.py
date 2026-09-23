@@ -161,11 +161,11 @@ class RosTelemetryProvider:
                 except ImportError:
                     pass
             try:
-                # 已在 ROS2 图谱中确认：/fake/upperlimb/tcp_pose/{left,right}_arm
-                # 使用这个消息类型，而不是错误地假设为 geometry_msgs/PoseStamped。
+                # 已在 Pico 实机 ROS2 图谱中确认的上肢消息。
                 from upperlimb_msgs.msg import Pose as UpperlimbPose
+                from upperlimb_msgs.msg import UplimbState
             except ImportError:
-                UpperlimbPose = None
+                UpperlimbPose = UplimbState = None
         except ImportError as exc:
             raise RuntimeError(
                 "ROS 模式需要在已安装 rclpy 和 ROS2 标准消息包的机器人环境中运行"
@@ -180,6 +180,7 @@ class RosTelemetryProvider:
         self._Resource = Resource
         self._Errors = Errors
         self._UpperlimbPose = UpperlimbPose
+        self._UplimbState = UplimbState
         self._WrenchStamped = WrenchStamped
         self._lock = threading.Lock()
         self._last_seen: dict[str, float] = {}
@@ -200,6 +201,7 @@ class RosTelemetryProvider:
             "payloadKg": None,
             "gripForceN": None,
             "operationMode": None,
+            "upperLimbState": None,
             "uptime": None,
             "battery": {"percent": None, "remainingMinutes": None, "voltage": None, "current": None, "temperature": None, "cellVoltage": None, "chargeStatus": None, "cycles": None},
             "sensors": {"lidar": None, "depthCamera": None, "forceSensor": None, "bumper": None, "camera": None, "network": None},
@@ -251,6 +253,9 @@ class RosTelemetryProvider:
             self._node.create_subscription(UpperlimbPose, left_tcp_topic, lambda message: self._on_arm_tcp_pose("leftTcp", message), 10)
         if UpperlimbPose is not None and right_tcp_topic:
             self._node.create_subscription(UpperlimbPose, right_tcp_topic, lambda message: self._on_arm_tcp_pose("rightTcp", message), 10)
+        upperlimb_state_topic = os.getenv("ROS_UPPERLIMB_STATE_TOPIC", "").strip()
+        if UplimbState is not None and upperlimb_state_topic:
+            self._node.create_subscription(UplimbState, upperlimb_state_topic, self._on_uplimb_state, 10)
         # 诊断汇总的命名在不同交付版本中不同。订阅已知路径和部署时显式
         # 配置的路径；没有发布者时不会产生虚假告警。
         configured_diagnostic_topics = os.getenv("ROS_DIAGNOSTICS_TOPICS", "").strip()
@@ -549,6 +554,19 @@ class RosTelemetryProvider:
         with self._lock:
             self._mark_data_received_locked(side)
             self._snapshot["motion"][side] = tcp
+
+    def _on_uplimb_state(self, message: Any) -> None:
+        """保存上肢控制器的真实状态，不把它误标为自动/手动运行模式。"""
+        state = {
+            "commandNumber": self._number(getattr(message, "cmd_num", None)),
+            "commandName": str(getattr(message, "cmd_name", "")) or None,
+            "leftArmSingular": bool(getattr(message, "left_arm_is_singular", False)),
+            "rightArmSingular": bool(getattr(message, "right_arm_is_singular", False)),
+            "iddpStatus": bool(getattr(message, "iddp_status", False)),
+        }
+        with self._lock:
+            self._mark_data_received_locked("upperlimb_state")
+            self._snapshot["upperLimbState"] = state
 
     def _on_diagnostics(self, message: Any) -> None:
         severity = {1: "warning", 2: "critical", 3: "critical"}

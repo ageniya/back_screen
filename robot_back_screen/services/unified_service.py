@@ -57,6 +57,8 @@ class UnifiedDiagnosticsService:
                 merged_motion[key] = local_motion[key]
         if merged_motion:
             merged["motion"] = merged_motion
+        if local.get("upperLimbState"):
+            merged["upperLimbState"] = local["upperLimbState"]
         merged_sensors = dict(orin.get("sensors") or {})
         local_sensors = local.get("sensors") or {}
         if local_sensors.get("forceSensor") is not None:

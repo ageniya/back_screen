@@ -584,7 +584,7 @@ function isDemoMode() {
   }
 
   function getRobot3DDataPanel(view, data) {
-    var motion = data.motion || {}, battery = data.battery || {}, sensors = data.sensors || {}, hands = data.hands || {}, wristForces = data.wristForces || {};
+    var motion = data.motion || {}, battery = data.battery || {}, sensors = data.sensors || {}, hands = data.hands || {}, wristForces = data.wristForces || {}, upperLimbState = data.upperLimbState || {};
     var rows = [];
     var title = '';
     if (view === 'motion') {
@@ -593,10 +593,15 @@ function isDemoMode() {
     } else if (view === 'joints') {
       title = '关节状态';
       var positions = motion.jointPositions || {};
-      var entries = Object.entries(positions).slice(0, 6);
-      rows = entries.length ? entries.map(function(entry) {
+      var entries = Object.entries(positions);
+      if (upperLimbState.commandName) rows.push(['上肢命令', upperLimbState.commandName]);
+      if (upperLimbState.commandName || upperLimbState.commandNumber !== undefined) {
+        rows.push(['左臂奇异位形', upperLimbState.leftArmSingular ? '是' : '否']);
+        rows.push(['右臂奇异位形', upperLimbState.rightArmSingular ? '是' : '否']);
+      }
+      rows = rows.concat(entries.length ? entries.map(function(entry) {
         return [entry[0], (Number(entry[1]) * 180 / Math.PI).toFixed(2) + '°'];
-      }) : (motion.joints || []).slice(0, 6).map(function(value, index) { return ['J' + (index + 1), value]; });
+      }) : (motion.joints || []).slice(0, 6).map(function(value, index) { return ['J' + (index + 1), value]; }));
     } else if (view === 'battery') {
       title = '电池状态';
       rows = [['电量', displayValue(battery.percent, '%')], ['电压', displayValue(battery.voltage, 'V')], ['电流', displayValue(battery.current, 'A')], ['温度', displayValue(battery.temperature, '°C')], ['状态', battery.chargeStatus]];
