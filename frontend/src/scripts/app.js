@@ -939,7 +939,7 @@ function isDemoMode() {
   function displayNumber(value, suffix) {
     if (value === undefined || value === null || value === '') return '--';
     var number = Number(value);
-    return Number.isFinite(number) ? number.toFixed(2) + (suffix || '') : String(value) + (suffix || '');
+    return Number.isFinite(number) ? number.toFixed(1) + (suffix || '') : String(value) + (suffix || '');
   }
 
   function setBatteryRowLabels(labels) {
@@ -947,16 +947,23 @@ function isDemoMode() {
   }
 
   function renderBatteryOrSystemResource(data, battery) {
+    var orinResourceRow = document.getElementById('orinResourceRow');
     var hasBattery = Object.values(battery || {}).some(function(value) { return value !== null && value !== undefined && value !== ''; });
     if (hasBattery) {
+      if (orinResourceRow) orinResourceRow.classList.remove('resource-row');
       setBatteryRowLabels(['电量', '电压', '电流', '温度', '单体', '状态', '循环']);
       return;
     }
     // 当前 Orin 没有电池消息时，展示已真实收到的计算单元资源，而不是一排 --。
     var metrics = (data.diagnosticMetrics || {}).systemResource;
-    if (!metrics) return;
+    if (!metrics) {
+      if (orinResourceRow) orinResourceRow.classList.remove('resource-row');
+      setBatteryRowLabels(['电量', '电压', '电流', '温度', '单体', '状态', '循环']);
+      return;
+    }
+    if (orinResourceRow) orinResourceRow.classList.add('resource-row');
     var errors = (data.diagnosticMetrics || {}).systemResourceErrors || {};
-    setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
+    setBatteryRowLabels(['Orin CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
     setText('batteryLevel', displayNumber(metrics.cpuUsage, '%'));
     setText('batteryVoltage', displayNumber(metrics.memoryUsage));
     setText('batteryCurrent', displayNumber(metrics.diskUsage));
@@ -969,10 +976,12 @@ function isDemoMode() {
   function renderPicoResource(data) {
     var metrics = (data.diagnosticMetrics || {}).picoResource;
     var errors = (data.diagnosticMetrics || {}).picoResourceErrors || {};
-    if (!metrics) {
+    var hasMetrics = metrics && Object.keys(metrics).some(function(key) { return metrics[key] !== null && metrics[key] !== undefined; });
+    if (!hasMetrics) {
       setText('picoCpu', '暂未接入');
       ['picoMemory', 'picoDisk', 'picoGpu', 'picoTemperature'].forEach(function(id) { setText(id, '--'); });
       setText('picoResourceError', '无资源话题');
+      setText('picoResourceSource', '--');
       return;
     }
     setText('picoCpu', displayNumber(metrics.cpuUsage, '%'));
@@ -981,6 +990,7 @@ function isDemoMode() {
     setText('picoGpu', displayNumber(metrics.gpuUsage, '%'));
     setText('picoTemperature', displayNumber(metrics.temperature, '°C'));
     setText('picoResourceError', Object.keys(errors).some(function(key) { return errors[key] === true; }) ? '存在告警' : '正常');
+    setText('picoResourceSource', 'Pico');
   }
 
   function applySnapshot(data) {
@@ -1004,7 +1014,7 @@ function isDemoMode() {
     renderBatteryOrSystemResource(data, battery);
     renderPicoResource(data);
     var joints = motion.joints || data.joints || [];
-    for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(2) + '°' : displayValue(jointValue)); }
+    for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(1) + '°' : displayValue(jointValue)); }
     setText('payload', displayNumber(data.payloadKg, 'kg'));
     setText('gripForce', displayNumber(data.gripForceN, 'N'));
     setText('operationMode', displayValue(data.operationMode));

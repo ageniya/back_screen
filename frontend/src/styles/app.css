@@ -135,7 +135,15 @@
     white-space: nowrap;
     overflow: hidden;
   }
-  .resource-row { gap: 12px; font-size: 12px; }
+  .resource-row {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+  .resource-row > span { min-width: 0; }
+  .resource-row .batt-divider { display: none; }
   .battery-row .batt-label { color: #AAAAAA; }
   .battery-row .batt-value { color: #52C41A; }
   .battery-row .batt-divider { color: #333333; }

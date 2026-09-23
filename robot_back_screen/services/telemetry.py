@@ -424,7 +424,10 @@ class RosTelemetryProvider:
             "gpuUsage": self._number(getattr(message, "gpu_usage", None)),
         }
         with self._lock:
-            self._mark_data_received_locked("system_resource")
+            # Orin 与 Pico 资源必须分别记录新鲜度。否则 Pico 节点停止
+            # 发布后，界面会一直显示内存中遗留的旧资源数值。
+            source_key = "system_resource" if source == "orin" else "pico_resource"
+            self._mark_data_received_locked(source_key)
             metrics_store = self._snapshot.setdefault("diagnosticMetrics", {})
             average_cpu = None
             if source == "orin" and metrics_store.get("systemResourceCpuSource") == "diagnostics_average":
@@ -443,7 +446,8 @@ class RosTelemetryProvider:
             "overDisk": bool(getattr(message, "over_disk", False)),
         }
         with self._lock:
-            self._mark_data_received_locked("system_resource_errors")
+            source_key = "system_resource_errors" if source == "orin" else "pico_resource_errors"
+            self._mark_data_received_locked(source_key)
             self._resource_error_flags = flags
             metrics_store = self._snapshot.setdefault("diagnosticMetrics", {})
             metrics_store["systemResourceErrors" if source == "orin" else "picoResourceErrors"] = flags
@@ -649,6 +653,13 @@ class RosTelemetryProvider:
             for name in snapshot["sensors"]:
                 seen_at = self._last_seen.get(name)
                 snapshot["sensors"][name] = None if seen_at is None else now - seen_at <= self._sensor_timeout
+            # Pico 资源未持续发布时，不把上一次缓存误报为实时数据。
+            pico_resource_at = self._active_sources.get("pico_resource")
+            if pico_resource_at is None or now - pico_resource_at > self._data_stale_seconds:
+                metrics = snapshot.get("diagnosticMetrics")
+                if isinstance(metrics, dict):
+                    metrics.pop("picoResource", None)
+                    metrics.pop("picoResourceErrors", None)
         return snapshot
 
     async def connection_status(self) -> dict[str, Any]:
