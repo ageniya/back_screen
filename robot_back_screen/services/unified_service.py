@@ -20,6 +20,9 @@ class UnifiedDiagnosticsService:
         # Pico 可选读取 Orin 的 HTTP 数据。未配置时仍是原来的单机模式。
         self.orin = RemoteRobotClient()
         self.history: list[dict[str, Any]] = []
+        # 没有接入独立诊断引擎时，一键诊断仍可基于已收到的遥测数据
+        # 进行只读检查。结果只保存在内存中，下一次检查会用新结果覆盖。
+        self._builtin_alarms: list[dict[str, Any]] = []
 
     @staticmethod
     def _items(response: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -108,7 +111,7 @@ class UnifiedDiagnosticsService:
                 "occurrenceCount": raw.get("occurrence_count", 1),
                 "label": "实时曲线 · 诊断数据", "values": [0, 0, 0, 0, 0],
             })
-        local_alarms = alarms + await self.telemetry.diagnostic_alarms()
+        local_alarms = alarms + self._builtin_alarms + await self.telemetry.diagnostic_alarms()
         orin_alarms = self._items(await self.orin.fetch("/alarms"))
         # IDs identify alarm lifecycle; deduplicate when both endpoints happen
         # to expose the same diagnostic item.
@@ -118,10 +121,14 @@ class UnifiedDiagnosticsService:
             unique[str(alarm.get("id", uuid.uuid4()))] = alarm
         return list(unique.values())
 
-    async def snapshot(self) -> dict[str, Any]:
+    async def _current_snapshot(self) -> dict[str, Any]:
+        """Collect the same combined Pico/Orin state used by the status page."""
         local_snapshot = await self.telemetry.snapshot()
         orin_snapshot = await self.orin.fetch("/robot/snapshot")
-        snapshot = self._merge_snapshot(local_snapshot, orin_snapshot)
+        return self._merge_snapshot(local_snapshot, orin_snapshot)
+
+    async def snapshot(self) -> dict[str, Any]:
+        snapshot = await self._current_snapshot()
         alarms = await self.alarms()
         level = max((alarm["severity"] for alarm in alarms), key=lambda item: SEVERITY_RANK.get(item, 0), default="normal")
         label = {"normal": "系统健康", "info": "需注意", "warning": "系统警告", "critical": "系统异常", "emergency": "紧急停机"}.get(level, "系统健康")
@@ -135,6 +142,88 @@ class UnifiedDiagnosticsService:
             label = "数据接入中" if active_sources else "等待 ROS 数据"
         snapshot["health"] = {"level": level, "label": label, "alertCount": len(alarms)}
         return snapshot
+
+    @staticmethod
+    def _as_number(value: Any) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number == number else None  # filter NaN
+
+    @staticmethod
+    def _builtin_alarm(
+        alarm_id: str, title: str, desc: str, suggestion: str, severity: str = "warning"
+    ) -> dict[str, Any]:
+        return {
+            "id": alarm_id,
+            "code": alarm_id.upper().replace("builtin-", "BUILTIN-"),
+            "severity": severity,
+            "title": title,
+            "time": now_text(),
+            "desc": desc,
+            "suggestion": suggestion,
+            "occurrenceCount": 1,
+            "label": "一键诊断（实时数据）",
+            "values": [],
+        }
+
+    async def _run_builtin_diagnosis(self) -> list[dict[str, Any]]:
+        """Check only values actually present in the current ROS snapshot.
+
+        Missing or stale fields are *unknown*, not faults.  This is important
+        during gradual middleware rollout: lack of a publisher must not turn
+        into a fabricated robot alarm.
+        """
+        snapshot = await self._current_snapshot()
+        metrics = snapshot.get("diagnosticMetrics") or {}
+        sensors = snapshot.get("sensors") or {}
+        alarms: list[dict[str, Any]] = []
+
+        def check_resource(prefix: str, label: str, resource: Any) -> None:
+            if not isinstance(resource, dict):
+                return
+            limits = (
+                ("cpuUsage", 90.0, "CPU 占用过高", "%", "请检查高负载进程。"),
+                ("memoryUsage", 90.0, "内存占用过高", "%", "请检查内存占用与长期运行进程。"),
+                ("diskUsage", 90.0, "磁盘占用过高", "%", "请清理日志或扩容存储空间。"),
+                ("gpuUsage", 95.0, "GPU 占用过高", "%", "请检查视觉、推理等 GPU 任务。"),
+                ("temperature", 80.0, "温度过高", "°C", "请检查散热、风扇和环境温度。"),
+            )
+            for field, threshold, title, unit, suggestion in limits:
+                value = self._as_number(resource.get(field))
+                if value is None or value < threshold:
+                    continue
+                severity = "critical" if field == "temperature" and value >= 90 else "warning"
+                alarms.append(self._builtin_alarm(
+                    f"builtin-{prefix}-{field}",
+                    f"{label}{title}",
+                    f"当前值 {value:.1f}{unit}，阈值 {threshold:.0f}{unit}。",
+                    suggestion,
+                    severity,
+                ))
+
+        check_resource("orin", "Orin ", metrics.get("systemResource"))
+        check_resource("pico", "Pico ", metrics.get("picoResource"))
+
+        sensor_names = {
+            "lidar": "激光雷达", "depthCamera": "深度相机", "forceSensor": "六维力传感器",
+            "bumper": "碰撞条", "camera": "摄像头", "network": "网络",
+        }
+        for key, label in sensor_names.items():
+            # False means this source has been seen previously but is now
+            # offline; None means it has not been wired into middleware yet.
+            if sensors.get(key) is False:
+                alarms.append(self._builtin_alarm(
+                    f"builtin-sensor-{key}",
+                    f"{label}离线",
+                    f"后端最近未收到{label}的有效数据。",
+                    "请检查设备供电、线缆、驱动节点和 ROS2 话题。",
+                    "critical" if key == "network" else "warning",
+                ))
+
+        self._builtin_alarms = alarms
+        return alarms
 
     async def work_summary(self) -> dict[str, Any]:
         return (await self.orin.fetch("/work-summary")) or await self.telemetry.work_summary()
@@ -157,17 +246,30 @@ class UnifiedDiagnosticsService:
         }
 
     async def diagnose(self) -> dict[str, Any]:
-        # ROS 已接入但诊断引擎尚未接入时，绝不能退回到内存模拟引擎。
-        # 否则用户点击背屏按钮会凭空出现一条“模拟告警”。
+        # 独立诊断引擎尚未接入时，不使用 MockDiagnosisEngine 生成虚假
+        # 告警，而是直接检查此刻已经读取到的 ROS 遥测数据。
         if self.telemetry.mode == "ros" and isinstance(self.engine, MockDiagnosisEngine):
-            message = "诊断引擎尚未接入：未执行诊断，也未生成告警"
-            self._record("diagnose_unavailable", message)
-            return {"accepted": False, "message": message}
+            alarms = await self._run_builtin_diagnosis()
+            message = f"已检查当前可读取数据，发现 {len(alarms)} 条问题"
+            self._record("builtin_diagnose", message)
+            return {
+                "accepted": True,
+                "commandId": str(uuid.uuid4()),
+                "mode": "builtin_telemetry",
+                "alarmCount": len(alarms),
+                "message": message,
+            }
         response = await self._engine_action("diagnose_once")
         self._record("diagnose", "已请求执行诊断规则")
         return {"accepted": bool(response.get("success", True)), "commandId": str(uuid.uuid4()), "engine": response}
 
     async def recover_alarm(self, alarm_id: str) -> dict[str, Any]:
+        if self.telemetry.mode == "ros" and isinstance(self.engine, MockDiagnosisEngine) and alarm_id.startswith("builtin-"):
+            remaining = await self._run_builtin_diagnosis()
+            still_active = any(item["id"] == alarm_id for item in remaining)
+            message = "问题仍存在，请先在实机处理后再确认" if still_active else "已重新检查，该问题已恢复"
+            self._record("builtin_alarm_recheck", message)
+            return {"accepted": not still_active, "commandId": str(uuid.uuid4()), "message": message}
         code = alarm_id.replace("_", "-")
         major, _, minor = code.partition("-")
         response = await self._engine_action("alarm_recover", major_code=major, minor_code=minor)
@@ -183,8 +285,10 @@ class UnifiedDiagnosticsService:
             cleared_count = self.engine.clear_alarms()
             message = f"已清除 {cleared_count} 条模拟告警"
         elif isinstance(self.engine, MockDiagnosisEngine):
-            cleared_count = 0
-            message = "诊断引擎尚未接入：未清除任何告警"
+            before = len(self._builtin_alarms)
+            remaining = await self._run_builtin_diagnosis()
+            cleared_count = max(0, before - len(remaining))
+            message = f"已重新检查，清除 {cleared_count} 条已恢复问题；仍有 {len(remaining)} 条问题"
         else:
             cleared_count = 0
             message = "已请求清除已恢复告警"
