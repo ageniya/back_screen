@@ -204,7 +204,12 @@ class RosTelemetryProvider:
             "upperLimbState": None,
             "uptime": None,
             "battery": {"percent": None, "remainingMinutes": None, "voltage": None, "current": None, "temperature": None, "cellVoltage": None, "chargeStatus": None, "cycles": None},
-            "sensors": {"lidar": None, "depthCamera": None, "forceSensor": None, "bumper": None, "camera": None, "network": None},
+            "sensors": {
+                "lidar": None, "lidar1": None, "lidar2": None,
+                "depthCamera": None, "camera": None, "headCamera": None,
+                "leftWristCamera": None, "rightWristCamera": None,
+                "forceSensor": None, "bumper": None, "network": None,
+            },
             "network": {"ip": None, "signalStrength": None},
             # 手部与腕部数据单独保存：它们是已确认的真实 Pico 接口，但不应
             # 冒充上肢六轴关节或夹持力。
@@ -274,7 +279,12 @@ class RosTelemetryProvider:
         # 长时间运行时无限占用内存。
         self._node.create_subscription(Log, "/rosout", self._on_ros_log, 100)
         # chassis 文档已确认 WA1 的 2D 激光接口；PointCloud2 只在明确配置时订阅。
-        self._node.create_subscription(LaserScan, os.getenv("ROS_LASER_SCAN_TOPIC", f"{ns}/chassis/laser_scan"), lambda _: self._mark_seen("lidar"), self._sensor_qos)
+        lidar_1_topic = os.getenv("ROS_LIDAR_1_TOPIC", "").strip() or os.getenv("ROS_LASER_SCAN_TOPIC", f"{ns}/chassis/laser_scan")
+        lidar_2_topic = os.getenv("ROS_LIDAR_2_TOPIC", "").strip()
+        if lidar_1_topic:
+            self._node.create_subscription(LaserScan, lidar_1_topic, lambda _: self._mark_seen("lidar1"), self._sensor_qos)
+        if lidar_2_topic:
+            self._node.create_subscription(LaserScan, lidar_2_topic, lambda _: self._mark_seen("lidar2"), self._sensor_qos)
         pointcloud_topic = os.getenv("ROS_LIDAR_POINTCLOUD_TOPIC", "").strip()
         if pointcloud_topic:
             self._node.create_subscription(PointCloud2, pointcloud_topic, lambda _: self._mark_seen("lidar"), self._sensor_qos)
@@ -292,10 +302,16 @@ class RosTelemetryProvider:
         # indicators as "unknown" rather than incorrectly reporting healthy.
         depth_topic = os.getenv("ROS_DEPTH_CAMERA_TOPIC", "").strip()
         camera_topic = os.getenv("ROS_CAMERA_TOPIC", "").strip()
+        left_wrist_camera_topic = os.getenv("ROS_LEFT_WRIST_CAMERA_TOPIC", "").strip()
+        right_wrist_camera_topic = os.getenv("ROS_RIGHT_WRIST_CAMERA_TOPIC", "").strip()
         if depth_topic:
             self._node.create_subscription(Image, depth_topic, lambda _: self._mark_seen("depthCamera"), self._sensor_qos)
         if camera_topic:
-            self._node.create_subscription(Image, camera_topic, lambda _: self._mark_seen("camera"), self._sensor_qos)
+            self._node.create_subscription(Image, camera_topic, lambda _: self._mark_seen("headCamera"), self._sensor_qos)
+        if left_wrist_camera_topic:
+            self._node.create_subscription(Image, left_wrist_camera_topic, lambda _: self._mark_seen("leftWristCamera"), self._sensor_qos)
+        if right_wrist_camera_topic:
+            self._node.create_subscription(Image, right_wrist_camera_topic, lambda _: self._mark_seen("rightWristCamera"), self._sensor_qos)
 
         self._basic_info_client = self._node.create_client(BasicInfo, f"{ns}/robot/basic_info") if BasicInfo is not None else None
         self._stop_service = os.getenv("ROS_STOP_SERVICE", f"{ns}/robot/stop").strip()

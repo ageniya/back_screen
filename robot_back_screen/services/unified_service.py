@@ -61,8 +61,11 @@ class UnifiedDiagnosticsService:
             merged["upperLimbState"] = local["upperLimbState"]
         merged_sensors = dict(orin.get("sensors") or {})
         local_sensors = local.get("sensors") or {}
-        if local_sensors.get("forceSensor") is not None:
-            merged_sensors["forceSensor"] = local_sensors["forceSensor"]
+        # Pico 能提供手腕相机、上肢相关传感器等 Orin 快照中没有的
+        # 独立状态；只有明确的在线/离线值才覆盖，None 仍表示未知。
+        for key, value in local_sensors.items():
+            if value is not None:
+                merged_sensors[key] = value
         merged["sensors"] = merged_sensors
         merged_metrics = dict(orin.get("diagnosticMetrics") or {})
         # Pico 的 diagnostics 通常只包含 CPU 平均值；不能用这个不完整

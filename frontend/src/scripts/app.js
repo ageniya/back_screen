@@ -82,7 +82,7 @@ function isDemoMode() {
     // Do not let initial demo data overwrite the state received from server.
     if (!isDemoMode()) return;
     var sensors = document.querySelectorAll('#sensorRow .sensor-dot');
-    var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
+    var sensorNames = ['lidar1', 'lidar2', 'headCamera', 'leftWristCamera', 'rightWristCamera', 'forceSensor', 'bumper', 'network'];
     sensors.forEach(function(dot, i) {
       dot.className = 'sensor-dot ' + sensorVisualState(sensorNames[i], demoSensorState[sensorNames[i]]);
     });
@@ -251,7 +251,7 @@ function isDemoMode() {
     }
   ];
   var alertData = [];
-  var demoSensorState = { lidar: true, depthCamera: true, forceSensor: true, bumper: 'online', camera: true, network: true };
+  var demoSensorState = { lidar1: true, lidar2: null, headCamera: true, leftWristCamera: true, rightWristCamera: true, forceSensor: true, bumper: 'online', network: true };
   var currentAlertIndex = 0;
 
   function updateAlertPageTime() {
@@ -557,7 +557,7 @@ function isDemoMode() {
   }
 
   function getRobot3DDemoSnapshot() {
-    var sensorNames = ['lidar', 'depthCamera', 'forceSensor', 'bumper', 'camera', 'network'];
+    var sensorNames = ['lidar1', 'lidar2', 'headCamera', 'leftWristCamera', 'rightWristCamera', 'forceSensor', 'bumper', 'network'];
     var sensors = {};
     document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) {
       var name = sensorNames[index];
@@ -607,7 +607,7 @@ function isDemoMode() {
       rows = [['电量', displayValue(battery.percent, '%')], ['电压', displayValue(battery.voltage, 'V')], ['电流', displayValue(battery.current, 'A')], ['温度', displayValue(battery.temperature, '°C')], ['状态', battery.chargeStatus]];
     } else {
       title = '传感器状态';
-      rows = [['激光雷达', sensors.lidar], ['深度相机', sensors.depthCamera], ['六维力', sensors.forceSensor], ['碰撞条', sensors.bumper], ['摄像头', sensors.camera], ['网络', sensors.network]].map(function(item) {
+      rows = [['雷达①', sensors.lidar1], ['雷达②', sensors.lidar2], ['头部相机', sensors.headCamera], ['左腕相机', sensors.leftWristCamera], ['右腕相机', sensors.rightWristCamera], ['六维力', sensors.forceSensor], ['碰撞条', sensors.bumper], ['网络', sensors.network]].map(function(item) {
         var state = sensorVisualState(item[0] === '碰撞条' ? 'bumper' : 'sensor', item[1]);
         return [item[0], state === 'green' ? '正常' : state === 'yellow' ? '已触发' : state === 'red' ? '离线' : '未知', state];
       });
@@ -1030,7 +1030,7 @@ function isDemoMode() {
     setText('networkIp', ipText.length ? ipText.join(' · ') : 'IP --');
     setText('alertCount', displayValue(health.alertCount)); setText('alertBannerCount', displayValue(health.alertCount));
     var sensorFault = false;
-    if (data.sensors) { var sensorNames = ['lidar','depthCamera','forceSensor','bumper','camera','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var sensorState = data.sensors[sensorNames[index]]; var stateClass = sensorVisualState(sensorNames[index], sensorState); if (stateClass === 'red') sensorFault = true; dot.className = 'sensor-dot ' + stateClass; }); }
+    if (data.sensors) { var sensorNames = ['lidar1','lidar2','headCamera','leftWristCamera','rightWristCamera','forceSensor','bumper','network']; document.querySelectorAll('#sensorRow .sensor-dot').forEach(function(dot, index) { var sensorState = data.sensors[sensorNames[index]]; var stateClass = sensorVisualState(sensorNames[index], sensorState); if (stateClass === 'red') sensorFault = true; dot.className = 'sensor-dot ' + stateClass; }); }
     var rank = { normal: 0, info: 1, warning: 2, critical: 3, emergency: 4 };
     var healthLevel = health.level || 'normal';
     if (sensorFault && (rank[healthLevel] || 0) < rank.critical) healthLevel = 'critical';
