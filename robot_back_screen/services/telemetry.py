@@ -192,6 +192,10 @@ class RosTelemetryProvider:
         self._diagnostic_alarms: list[dict[str, Any]] = []
         self._logs: list[dict[str, Any]] = []
         self._resource_error_flags: dict[str, bool] = {}
+        # Pico 的 resource ROS 话题在当前镜像中没有发布者，但背屏服务
+        # 就运行在 Pico 本机，可按需从 Linux /proc 与 sysfs 读取资源数据。
+        self._local_resource_source = os.getenv("LOCAL_RESOURCE_SOURCE", "").strip().lower()
+        self._last_cpu_times: tuple[int, int] | None = None
         self._sensor_timeout = float(os.getenv("ROS_SENSOR_TIMEOUT_SECONDS", "3"))
         self._network_interface = os.getenv("NETWORK_INTERFACE", "").strip()
         self._control_enabled = os.getenv("ROS_ENABLE_CONTROL", "false").strip().lower() == "true"
@@ -321,6 +325,8 @@ class RosTelemetryProvider:
         if self._basic_info_client is not None:
             self._node.create_timer(5.0, self._request_basic_info)
         self._node.create_timer(2.0, self._refresh_network)
+        if self._local_resource_source == "pico":
+            self._node.create_timer(3.0, self._refresh_local_pico_resource)
         self._spin_thread = threading.Thread(target=self._spin, name="robot-diagnostics-ros", daemon=True)
         self._spin_thread.start()
 
@@ -387,6 +393,62 @@ class RosTelemetryProvider:
                 self._mark_seen_locked("network")
             else:
                 self._last_seen["network"] = time.monotonic() - self._sensor_timeout - 1
+
+    def _refresh_local_pico_resource(self) -> None:
+        """Read Pico's own Linux resource usage when its ROS resource topic is absent."""
+        try:
+            cpu_line = open("/proc/stat", encoding="utf-8").readline().split()
+            cpu_values = [int(value) for value in cpu_line[1:]]
+            total = sum(cpu_values)
+            idle = cpu_values[3] + (cpu_values[4] if len(cpu_values) > 4 else 0)
+            cpu_usage = None
+            if self._last_cpu_times is not None:
+                previous_total, previous_idle = self._last_cpu_times
+                total_delta, idle_delta = total - previous_total, idle - previous_idle
+                if total_delta > 0:
+                    cpu_usage = round(100.0 * (1.0 - idle_delta / total_delta), 2)
+            self._last_cpu_times = (total, idle)
+
+            memory_values: dict[str, int] = {}
+            for line in open("/proc/meminfo", encoding="utf-8"):
+                key, value = line.split(":", 1)
+                memory_values[key] = int(value.strip().split()[0])
+            total_memory = memory_values.get("MemTotal", 0)
+            available_memory = memory_values.get("MemAvailable", 0)
+            memory_usage = round(100.0 * (1.0 - available_memory / total_memory), 2) if total_memory else None
+
+            disk = os.statvfs("/")
+            disk_usage = round(100.0 * (1.0 - disk.f_bavail / disk.f_blocks), 2) if disk.f_blocks else None
+            temperatures = []
+            for zone in range(32):
+                path = f"/sys/class/thermal/thermal_zone{zone}/temp"
+                if not os.path.exists(path):
+                    continue
+                raw = self._number(open(path, encoding="utf-8").read().strip())
+                if raw is not None:
+                    temperatures.append(raw / 1000.0 if raw > 1000 else raw)
+            temperature = round(max(temperatures), 2) if temperatures else None
+        except (OSError, ValueError, IndexError):
+            return
+
+        metrics = {
+            "cpuUsage": cpu_usage,
+            "memoryUsage": memory_usage,
+            "diskUsage": disk_usage,
+            "temperature": temperature,
+            "gpuUsage": None,
+        }
+        flags = {
+            "overTemperature": bool(temperature is not None and temperature >= 80),
+            "overCpu": bool(cpu_usage is not None and cpu_usage >= 90),
+            "overMemory": bool(memory_usage is not None and memory_usage >= 90),
+            "overDisk": bool(disk_usage is not None and disk_usage >= 90),
+        }
+        with self._lock:
+            self._mark_data_received_locked("pico_resource")
+            store = self._snapshot.setdefault("diagnosticMetrics", {})
+            store["picoResource"] = metrics
+            store["picoResourceErrors"] = flags
 
     def _on_battery(self, message: Any) -> None:
         percent = self._number(message.percentage)
