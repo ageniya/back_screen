@@ -44,6 +44,19 @@ class UnifiedDiagnosticsService:
         for key in ("hands", "wristForces"):
             if local.get(key):
                 merged[key] = local[key]
+        # 上肢关节和左右 TCP 目前由 Pico 提供。Orin 快照通常没有这些
+        # 字段，因此合并时不能用 Orin 的空值覆盖 Pico 已收到的实时姿态。
+        local_motion = local.get("motion") or {}
+        merged_motion = dict(orin.get("motion") or {})
+        if local_motion.get("jointPositions"):
+            merged_motion["jointPositions"] = local_motion["jointPositions"]
+        if any(item is not None for item in local_motion.get("joints", [])):
+            merged_motion["joints"] = local_motion["joints"]
+        for key in ("leftTcp", "rightTcp"):
+            if local_motion.get(key):
+                merged_motion[key] = local_motion[key]
+        if merged_motion:
+            merged["motion"] = merged_motion
         merged_sensors = dict(orin.get("sensors") or {})
         local_sensors = local.get("sensors") or {}
         if local_sensors.get("forceSensor") is not None:
