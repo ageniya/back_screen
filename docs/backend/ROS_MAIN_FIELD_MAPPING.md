@@ -73,15 +73,15 @@ export ROS_LEFT_TCP_TOPIC='/实际的左手末端位姿话题'
 export ROS_RIGHT_TCP_TOPIC='/实际的右手末端位姿话题'
 ```
 
-已验证的仿真上肢示例为：
+Pico 实机已经确认的上肢接口为：
 
 ```bash
-export ROS_JOINT_STATES_TOPIC='/fake/upperlimb/joint_states'
-export ROS_LEFT_TCP_TOPIC='/fake/upperlimb/tcp_pose/left_arm'
-export ROS_RIGHT_TCP_TOPIC='/fake/upperlimb/tcp_pose/right_arm'
+export ROS_JOINT_STATES_TOPIC='/zj_humanoid/upperlimb/joint_states'
+export ROS_LEFT_TCP_TOPIC='/zj_humanoid/upperlimb/tcp_pose/left_arm'
+export ROS_RIGHT_TCP_TOPIC='/zj_humanoid/upperlimb/tcp_pose/right_arm'
 ```
 
-左右 TCP 使用已确认的 `upperlimb_msgs/msg/Pose`。未配置时，背屏 3D 姿态和左右手 TCP 显示为 `--`，不会把猜测数据当成实机数据。
+`joint_states` 是标准 `sensor_msgs/msg/JointState`，已验证包含双臂、颈部和升降轴共 17 个关节；左右 TCP 使用 `upperlimb_msgs/msg/Pose`。`/fake/upperlimb/...` 是示教/仿真接口，不能配置到实机背屏。未配置时，背屏 3D 姿态和左右手 TCP 显示为 `--`，不会把猜测数据当成实机数据。
 
 ## 诊断边界
 
