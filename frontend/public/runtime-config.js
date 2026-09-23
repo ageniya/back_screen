@@ -1,6 +1,9 @@
-// Deployment-time configuration. Keep both values empty for offline demo mode.
-// Example: window.ROBOT_DIAGNOSTIC_API = 'http://127.0.0.1:8080/api/v1';
-// Development shortcut: append ?api=http://127.0.0.1:8000/api/v1 to the page URL.
+// Deployment-time configuration. When served by the unified backend, use that
+// same origin automatically. Vite development remains demo mode unless ?api=
+// is supplied, for example ?api=http://127.0.0.1:8000/api/v1.
 var robotApiFromQuery = new URLSearchParams(window.location.search).get('api') || '';
-window.ROBOT_DIAGNOSTIC_API = window.ROBOT_DIAGNOSTIC_API || robotApiFromQuery;
+var robotApiFromUnifiedService = !['5173', '5174'].includes(window.location.port)
+  ? window.location.origin + '/api/v1'
+  : '';
+window.ROBOT_DIAGNOSTIC_API = window.ROBOT_DIAGNOSTIC_API || robotApiFromQuery || robotApiFromUnifiedService;
 window.ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;

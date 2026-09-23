@@ -4,7 +4,7 @@
 
 ## 1. HTTP 接口
 
-接口前缀由部署配置 `public/runtime-config.js` 中的 `window.ROBOT_DIAGNOSTIC_API` 指定，例如 `http://127.0.0.1:8080/api/v1`。
+开发环境可由 `frontend/public/runtime-config.js` 或地址参数指定接口前缀；统一部署时，背屏通过同一 8000 服务自动使用 `${window.location.origin}/api/v1`。
 
 | 用途 | 方法与路径 |
 | --- | --- |

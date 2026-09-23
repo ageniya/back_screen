@@ -46,16 +46,20 @@ def frontend_directory() -> Path | None:
     """Locate compiled web files in development or after ROS installation."""
     configured = os.getenv("BACK_SCREEN_WEB_DIR")
     candidates = [Path(configured)] if configured else []
-    candidates.extend([
-        Path(__file__).resolve().parents[1] / "frontend" / "dist",
-        Path("/opt/ros/humble/share/robot_back_screen/web"),
-    ])
+    candidates.append(Path(__file__).resolve().parents[1] / "frontend" / "dist")
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        candidates.append(Path(get_package_share_directory("robot_back_screen")) / "web")
+    except (ImportError, LookupError):
+        # Allows local Python development before the ROS2 package is installed.
+        pass
     return next((directory for directory in candidates if directory.is_dir() and (directory / "index.html").is_file()), None)
 
 
 WEB_DIRECTORY = frontend_directory()
 if WEB_DIRECTORY:
     app.mount("/assets", StaticFiles(directory=WEB_DIRECTORY / "assets"), name="back-screen-assets")
+    app.mount("/models", StaticFiles(directory=WEB_DIRECTORY / "models"), name="back-screen-models")
 
 
 @app.get("/", include_in_schema=False)
@@ -64,6 +68,14 @@ async def back_screen() -> FileResponse:
     if not WEB_DIRECTORY:
         raise RuntimeError("未找到背屏前端构建文件；请先在 frontend 目录执行 npm run build。")
     return FileResponse(WEB_DIRECTORY / "index.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/runtime-config.js", include_in_schema=False)
+async def runtime_config() -> FileResponse:
+    """Deployment-time browser configuration, kept outside the Vite bundle."""
+    if not WEB_DIRECTORY:
+        raise RuntimeError("未找到背屏前端构建文件；请先在 frontend 目录执行 npm run build。")
+    return FileResponse(WEB_DIRECTORY / "runtime-config.js", media_type="application/javascript", headers={"Cache-Control": "no-store"})
 
 
 def service() -> UnifiedDiagnosticsService:

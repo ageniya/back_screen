@@ -14,11 +14,11 @@
 
 | 先后顺序 | 文件 | 作用 |
 | --- | --- | --- |
-| 1 | `app/main.py` | 对外开哪些门。背屏通过这些地址要数据或发操作。 |
-| 2 | `app/services/unified_service.py` | 把“数据”和“告警”组合成背屏能直接显示的一份结果。 |
-| 3 | `app/services/telemetry.py` | 数据从哪里来：现在是模拟数据，以后是 ROS 数据。 |
+| 1 | `robot_back_screen/main.py` | 对外开哪些门。背屏通过这些地址要数据或发操作。 |
+| 2 | `robot_back_screen/services/unified_service.py` | 把“数据”和“告警”组合成背屏能直接显示的一份结果。 |
+| 3 | `robot_back_screen/services/telemetry.py` | 数据从哪里来：现在是模拟数据，以后是 ROS 数据。 |
 
-`app/clients/diagnosis_engine.py` 是未来连接自定义规则引擎的预留文件；当前背屏开发不需要阅读它。
+`robot_back_screen/clients/diagnosis_engine.py` 是未来连接自定义规则引擎的预留文件；当前背屏开发不需要阅读它。
 
 ## 背屏实际使用的接口
 
@@ -55,7 +55,7 @@ source /etc/nav01/robot/robot_env.sh
 export TELEMETRY_MODE=ros
 ```
 
-之后后端会从真实接口读取电池、位置、速度、关节、诊断汇总等数据。详情见 [ROS 主分支接口映射](ROS_MAIN_FIELD_MAPPING.md)。
+之后后端会从真实接口读取已发布的电池、位置、速度、关节、诊断汇总等数据。详情见 [ROS 主分支接口映射](ROS_MAIN_FIELD_MAPPING.md)。
 
 ## 你当前需要做什么
 
