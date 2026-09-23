@@ -65,7 +65,14 @@ class UnifiedDiagnosticsService:
             merged_sensors["forceSensor"] = local_sensors["forceSensor"]
         merged["sensors"] = merged_sensors
         merged_metrics = dict(orin.get("diagnosticMetrics") or {})
-        merged_metrics.update(local.get("diagnosticMetrics") or {})
+        # Pico 的 diagnostics 通常只包含 CPU 平均值；不能用这个不完整
+        # 字典整体覆盖 Orin resource 中已存在的内存、磁盘、GPU 和温度。
+        for key, value in (local.get("diagnosticMetrics") or {}).items():
+            remote_value = merged_metrics.get(key)
+            if isinstance(remote_value, dict) and isinstance(value, dict):
+                merged_metrics[key] = {**remote_value, **value}
+            else:
+                merged_metrics[key] = value
         if merged_metrics:
             merged["diagnosticMetrics"] = merged_metrics
         # 整机主网络地址来自 Orin；同时保留 Pico 的本机地址，供背屏顶部
