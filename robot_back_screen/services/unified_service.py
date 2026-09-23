@@ -250,13 +250,17 @@ class UnifiedDiagnosticsService:
         # 告警，而是直接检查此刻已经读取到的 ROS 遥测数据。
         if self.telemetry.mode == "ros" and isinstance(self.engine, MockDiagnosisEngine):
             alarms = await self._run_builtin_diagnosis()
-            message = f"已检查当前可读取数据，发现 {len(alarms)} 条问题"
+            # `diagnostic_alarms()` and Orin also contain direct diagnostic
+            # flags (for example resource over-CPU).  Return the complete
+            # current result so the button feedback agrees with the alarm tab.
+            total_count = len(await self.alarms())
+            message = f"已检查当前可读取数据，当前共有 {total_count} 条问题"
             self._record("builtin_diagnose", message)
             return {
                 "accepted": True,
                 "commandId": str(uuid.uuid4()),
                 "mode": "builtin_telemetry",
-                "alarmCount": len(alarms),
+                "alarmCount": total_count,
                 "message": message,
             }
         response = await self._engine_action("diagnose_once")

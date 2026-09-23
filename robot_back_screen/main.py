@@ -90,7 +90,11 @@ async def monitor() -> str:
 
 @app.get("/healthz", summary="检查服务与实机数据状态", tags=["服务状态"])
 async def healthz() -> Dict[str, Any]:
-    diagnosis_mode = "模拟诊断引擎" if not os.getenv("DIAGNOSIS_WS_URL") else "诊断引擎适配器"
+    diagnosis_mode = (
+        "诊断引擎适配器" if os.getenv("DIAGNOSIS_WS_URL")
+        else "内置实时诊断" if os.getenv("TELEMETRY_MODE", "mock").strip().lower() == "ros"
+        else "模拟诊断引擎"
+    )
     return {
         "status": "ok",
         "diagnosisMode": diagnosis_mode,
