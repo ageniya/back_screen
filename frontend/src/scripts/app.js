@@ -850,7 +850,7 @@ function isDemoMode() {
     var el = document.getElementById('dataSource');
     if (!el) return;
     var labels = {
-      demo: ROBOT_API_BASE ? '后端模拟数据' : '本地演示数据',
+      demo: '演示模式',
       connecting: '接口连接中',
       waiting: '等待实机数据',
       // ROS 已连接只代表收到了某一路 ROS 消息；是否为完整实机数据要看
@@ -870,7 +870,8 @@ function isDemoMode() {
     el.className = 'data-freshness';
     if (note) note.className = 'data-note';
     if (!status || status.telemetryMode === 'mock') {
-      el.textContent = '演示数据';
+      el.classList.add('hidden');
+      el.textContent = '';
       if (note) note.textContent = '当前为演示数据，不代表机器人实时状态。';
       return;
     }
