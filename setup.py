@@ -32,6 +32,7 @@ setup(
         (f"share/{PACKAGE_NAME}/launch", ["launch/back_screen.launch.py"]),
     ] + web_data_files(),
     install_requires=["setuptools", "fastapi>=0.115,<1.0", "uvicorn[standard]>=0.30,<1.0", "websockets>=13,<16"],
+    scripts=["deploy/start-pico-back-screen.sh"],
     zip_safe=False,
     maintainer="机器人软件组",
     maintainer_email="robot@example.invalid",

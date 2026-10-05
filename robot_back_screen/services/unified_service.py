@@ -30,6 +30,11 @@ class UnifiedDiagnosticsService:
         self._alarm_persist_seconds = float(os.getenv("ALARM_PERSIST_SECONDS", "5"))
         self._pending_alarm_since: dict[str, float] = {}
         self._visible_alarm_ids: set[str] = set()
+        # 状态页的“资源告警”必须和告警列表使用同一套确认结果，不能直接
+        # 显示资源话题瞬时跳变的原始标志。
+        self._visible_resource_alerts: dict[str, dict[str, bool]] = {
+            "orin": {}, "pico": {}
+        }
 
     @staticmethod
     def _items(response: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -59,6 +64,8 @@ class UnifiedDiagnosticsService:
             merged_motion["jointPositions"] = local_motion["jointPositions"]
         if any(item is not None for item in local_motion.get("joints", [])):
             merged_motion["joints"] = local_motion["joints"]
+        if local_motion.get("jointSummary"):
+            merged_motion["jointSummary"] = local_motion["jointSummary"]
         for key in ("leftTcp", "rightTcp"):
             if local_motion.get(key):
                 merged_motion[key] = local_motion[key]
@@ -167,7 +174,30 @@ class UnifiedDiagnosticsService:
             if now - first_seen >= self._alarm_persist_seconds:
                 self._visible_alarm_ids.add(alarm_id)
                 visible.append(alarm)
+        self._visible_resource_alerts = self._resource_alerts_from(visible)
         return visible
+
+    @staticmethod
+    def _resource_alerts_from(alarms: list[dict[str, Any]]) -> dict[str, dict[str, bool]]:
+        """Turn confirmed resource alarms into compact status-page flags."""
+        result: dict[str, dict[str, bool]] = {"orin": {}, "pico": {}}
+        field_names = {
+            "overcpu": "overCpu", "cpuusage": "overCpu",
+            "overmemory": "overMemory", "memoryusage": "overMemory",
+            "overdisk": "overDisk", "diskusage": "overDisk",
+            "overtemperature": "overTemperature", "temperature": "overTemperature",
+            "overgpu": "overGpu", "gpuusage": "overGpu",
+        }
+        for alarm in alarms:
+            raw = " ".join(str(alarm.get(key, "")) for key in ("id", "code", "title")).lower()
+            # 只处理资源阈值告警，避免普通告警把资源栏也变红。
+            if "resource" not in raw and "cpu" not in raw and "内存" not in raw and "磁盘" not in raw and "温度" not in raw and "gpu" not in raw:
+                continue
+            source = "pico" if "pico" in raw else "orin"
+            for token, field in field_names.items():
+                if token in raw:
+                    result[source][field] = True
+        return result
 
     async def _current_snapshot(self) -> dict[str, Any]:
         """Collect the same combined Pico/Orin state used by the status page."""
@@ -189,6 +219,8 @@ class UnifiedDiagnosticsService:
             level = "info"
             label = "数据接入中" if active_sources else "等待 ROS 数据"
         snapshot["health"] = {"level": level, "label": label, "alertCount": len(alarms)}
+        # 供背屏资源栏显示；此处只含已经持续 5 秒的告警。
+        snapshot["resourceAlerts"] = self._visible_resource_alerts
         return snapshot
 
     @staticmethod

@@ -141,6 +141,10 @@ class RosTelemetryProvider:
             # 标准消息可独立工作：即使机器人专有消息包尚未安装，也允许先接入
             # 已确认的 sensor_msgs/JointState 上肢仿真数据。
             RobotState = BasicInfo = Errors = Resource = WorkStatus = None
+            # 现场存在同一话题名、不同消息包版本并存的情况：Orin 当前发布
+            # robot_msgs/Resource，而 Pico 同时安装了 navi_robot_msgs。DDS 不会
+            # 因字段看起来相同而自动匹配，因此保留旧版类型并同时订阅。
+            LegacyErrors = LegacyResource = None
             try:
                 # robot_jazzy 交付文档中的实际包名。
                 from navi_robot_msgs.msg import Errors, Resource, RobotState
@@ -161,6 +165,11 @@ class RosTelemetryProvider:
                 except ImportError:
                     pass
             try:
+                from robot_msgs.msg import Errors as LegacyErrors
+                from robot_msgs.msg import Resource as LegacyResource
+            except ImportError:
+                pass
+            try:
                 # 已在 Pico 实机 ROS2 图谱中确认的上肢消息。
                 from upperlimb_msgs.msg import Pose as UpperlimbPose
                 from upperlimb_msgs.msg import UplimbState
@@ -179,6 +188,8 @@ class RosTelemetryProvider:
         self._BasicInfo = BasicInfo
         self._Resource = Resource
         self._Errors = Errors
+        self._LegacyResource = LegacyResource
+        self._LegacyErrors = LegacyErrors
         self._UpperlimbPose = UpperlimbPose
         self._UplimbState = UplimbState
         self._WrenchStamped = WrenchStamped
@@ -198,10 +209,14 @@ class RosTelemetryProvider:
         self._last_cpu_times: tuple[int, int] | None = None
         self._sensor_timeout = float(os.getenv("ROS_SENSOR_TIMEOUT_SECONDS", "3"))
         self._network_interface = os.getenv("NETWORK_INTERFACE", "").strip()
+        # 型号是设备身份，不应因为可选的 basic_info 服务暂时未启动就显示
+        # unknown。部署时可用 ROBOT_MODEL 写入这台机器的已知型号；服务
+        # 后续返回了实际型号时仍会覆盖这个兜底值。
+        self._configured_robot_model = os.getenv("ROBOT_MODEL", "").strip() or None
         self._control_enabled = os.getenv("ROS_ENABLE_CONTROL", "false").strip().lower() == "true"
         self._snapshot: dict[str, Any] = {
-            "robotModel": None,
-            "motion": {"position": None, "target": None, "speed": None, "tcp": None, "leftTcp": None, "rightTcp": None, "joints": [None] * 6, "jointPositions": {}},
+            "robotModel": self._configured_robot_model,
+            "motion": {"position": None, "target": None, "speed": None, "tcp": None, "leftTcp": None, "rightTcp": None, "joints": [None] * 6, "jointSummary": [], "jointPositions": {}},
             "payloadKg": None,
             "gripForceN": None,
             "operationMode": None,
@@ -229,11 +244,19 @@ class RosTelemetryProvider:
         ns = "/" + (configured_ns or robot_name or "zj_humanoid")
 
         # Pico Robot publishes battery_state; WA chassis publishes battery_info.
-        # Subscribe to both because only the topic present on the target robot
-        # will produce data.
-        self._node.create_subscription(BatteryState, f"{ns}/robot/battery_state", self._on_battery, 10)
-        self._node.create_subscription(BatteryState, f"{ns}/robot/battery_info", self._on_battery, 10)
-        self._node.create_subscription(Odometry, f"{ns}/chassis/odom_info", self._on_odom, 10)
+        # Orin 当前镜像还会把底盘 Web 桥接数据发布在 /web/*。两类话题都
+        # 可以通过环境变量补充，避免把某一版中间件的固定命名写死在代码里。
+        def configured_topics(env_name: str, defaults: list[str]) -> list[str]:
+            extras = [item.strip() for item in os.getenv(env_name, "").split(",") if item.strip()]
+            return list(dict.fromkeys([*defaults, *extras]))
+
+        for topic in configured_topics(
+            "ROS_BATTERY_TOPICS",
+            [f"{ns}/robot/battery_state", f"{ns}/robot/battery_info"],
+        ):
+            self._node.create_subscription(BatteryState, topic, self._on_battery, 10)
+        for topic in configured_topics("ROS_ODOM_TOPICS", [f"{ns}/chassis/odom_info"]):
+            self._node.create_subscription(Odometry, topic, self._on_odom, 10)
         if RobotState is not None:
             self._node.create_subscription(RobotState, f"{ns}/robot/robot_state", self._on_robot_state, 10)
         # 上肢/作业接口不在当前实际对外文档中。只有接机确认 topic 后再通过
@@ -298,24 +321,34 @@ class RosTelemetryProvider:
         if Resource is not None:
             self._node.create_subscription(Resource, f"{ns}/robot/orin_states/resource", lambda message: self._on_resource(message, "orin"), 10)
             self._node.create_subscription(Resource, f"{ns}/robot/pico_states/resource", lambda message: self._on_resource(message, "pico"), 10)
+        if LegacyResource is not None and LegacyResource is not Resource:
+            self._node.create_subscription(LegacyResource, f"{ns}/robot/orin_states/resource", lambda message: self._on_resource(message, "orin"), 10)
+            self._node.create_subscription(LegacyResource, f"{ns}/robot/pico_states/resource", lambda message: self._on_resource(message, "pico"), 10)
         if Errors is not None:
             self._node.create_subscription(Errors, f"{ns}/robot/orin_states/errors", lambda message: self._on_resource_errors(message, "orin"), 10)
             self._node.create_subscription(Errors, f"{ns}/robot/pico_states/errors", lambda message: self._on_resource_errors(message, "pico"), 10)
+        if LegacyErrors is not None and LegacyErrors is not Errors:
+            self._node.create_subscription(LegacyErrors, f"{ns}/robot/orin_states/errors", lambda message: self._on_resource_errors(message, "orin"), 10)
+            self._node.create_subscription(LegacyErrors, f"{ns}/robot/pico_states/errors", lambda message: self._on_resource_errors(message, "pico"), 10)
 
-        # Camera instance names vary by robot. Empty variables keep their
-        # indicators as "unknown" rather than incorrectly reporting healthy.
+        # 背屏只需要相机在线状态，不展示图像画面。若订阅 Image，即使回调
+        # 什么也不做，Python 仍会反序列化每一张高带宽图像，Pico 会明显卡顿。
+        # 改为低频检查各话题是否有发布者，显示“相机驱动/话题在线”。
         depth_topic = os.getenv("ROS_DEPTH_CAMERA_TOPIC", "").strip()
         camera_topic = os.getenv("ROS_CAMERA_TOPIC", "").strip()
         left_wrist_camera_topic = os.getenv("ROS_LEFT_WRIST_CAMERA_TOPIC", "").strip()
         right_wrist_camera_topic = os.getenv("ROS_RIGHT_WRIST_CAMERA_TOPIC", "").strip()
-        if depth_topic:
-            self._node.create_subscription(Image, depth_topic, lambda _: self._mark_seen("depthCamera"), self._sensor_qos)
-        if camera_topic:
-            self._node.create_subscription(Image, camera_topic, lambda _: self._mark_seen("headCamera"), self._sensor_qos)
-        if left_wrist_camera_topic:
-            self._node.create_subscription(Image, left_wrist_camera_topic, lambda _: self._mark_seen("leftWristCamera"), self._sensor_qos)
-        if right_wrist_camera_topic:
-            self._node.create_subscription(Image, right_wrist_camera_topic, lambda _: self._mark_seen("rightWristCamera"), self._sensor_qos)
+        self._camera_topics = {
+            name: topic for name, topic in {
+                "depthCamera": depth_topic,
+                "headCamera": camera_topic,
+                "leftWristCamera": left_wrist_camera_topic,
+                "rightWristCamera": right_wrist_camera_topic,
+            }.items() if topic
+        }
+        if self._camera_topics:
+            self._refresh_camera_publishers()
+            self._node.create_timer(2.0, self._refresh_camera_publishers)
 
         self._basic_info_client = self._node.create_client(BasicInfo, f"{ns}/robot/basic_info") if BasicInfo is not None else None
         self._stop_service = os.getenv("ROS_STOP_SERVICE", f"{ns}/robot/stop").strip()
@@ -393,6 +426,19 @@ class RosTelemetryProvider:
                 self._mark_seen_locked("network")
             else:
                 self._last_seen["network"] = time.monotonic() - self._sensor_timeout - 1
+
+    def _refresh_camera_publishers(self) -> None:
+        """Lightweight camera availability check; deliberately does not read images."""
+        for name, topic in self._camera_topics.items():
+            try:
+                online = self._node.count_publishers(topic) > 0
+            except Exception:
+                continue
+            with self._lock:
+                if online:
+                    self._mark_seen_locked(name)
+                else:
+                    self._last_seen[name] = time.monotonic() - self._sensor_timeout - 1
 
     def _refresh_local_pico_resource(self) -> None:
         """Read Pico's own Linux resource usage when its ROS resource topic is absent."""
@@ -545,9 +591,16 @@ class RosTelemetryProvider:
             for name, value in zip(names, raw_positions)
             if self._number(value) is not None
         }
+        # 状态页紧凑摘要保留来源关节名，不能把真实关节顺序误标成 J1～J6。
+        joint_summary = [
+            {"name": str(name), "degrees": round(math.degrees(value), 1)}
+            for name, value in zip(names[:6], raw_positions[:6])
+            if self._number(value) is not None
+        ]
         with self._lock:
             self._mark_data_received_locked("joint_states")
             self._snapshot["motion"]["joints"] = values + [None] * (6 - len(values))
+            self._snapshot["motion"]["jointSummary"] = joint_summary
             self._snapshot["motion"]["jointPositions"] = joint_positions
 
     def _on_hand_joint_states(self, message: Any) -> None:
@@ -737,7 +790,8 @@ class RosTelemetryProvider:
             if not getattr(result, "success", False):
                 return
             with self._lock:
-                self._snapshot["robotModel"] = result.robot_model or None
+                # 空字符串代表服务没有提供型号，保留部署配置的已知型号。
+                self._snapshot["robotModel"] = result.robot_model or self._configured_robot_model
                 self._snapshot["network"]["ip"] = result.ip_address or None
 
         future.add_done_callback(save_result)
@@ -749,6 +803,22 @@ class RosTelemetryProvider:
             for name in snapshot["sensors"]:
                 seen_at = self._last_seen.get(name)
                 snapshot["sensors"][name] = None if seen_at is None else now - seen_at <= self._sensor_timeout
+            # 关节、TCP 都是瞬时状态。发布者停止后不能把最后一帧（常见为
+            # 全 0 的停机帧）继续冒充实时姿态，应明确交给页面显示为 --。
+            motion = snapshot.get("motion")
+            if isinstance(motion, dict):
+                joint_at = self._active_sources.get("joint_states")
+                if joint_at is None or now - joint_at > self._data_stale_seconds:
+                    motion["joints"] = [None] * 6
+                    motion["jointSummary"] = []
+                    motion["jointPositions"] = {}
+                for source, field in (("leftTcp", "leftTcp"), ("rightTcp", "rightTcp")):
+                    seen_at = self._active_sources.get(source)
+                    if seen_at is None or now - seen_at > self._data_stale_seconds:
+                        motion[field] = None
+            upper_limb_at = self._active_sources.get("upperlimb_state")
+            if upper_limb_at is None or now - upper_limb_at > self._data_stale_seconds:
+                snapshot["upperLimbState"] = None
             # Pico 资源未持续发布时，不把上一次缓存误报为实时数据。
             pico_resource_at = self._active_sources.get("pico_resource")
             if pico_resource_at is None or now - pico_resource_at > self._data_stale_seconds:

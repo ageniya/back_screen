@@ -57,6 +57,11 @@ function inferPartFromAlarm(alarm) {
 }
 
 export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, tooltipEl }) {
+  // Pico 为四核嵌入式设备，部分镜像没有 /dev/dri，Firefox 可能退回软件
+  // WebGL。自动降低这类设备的绘制成本；开发电脑仍使用原有画质。
+  const lowPowerRenderer = Number(navigator.hardwareConcurrency || 0) > 0
+    && Number(navigator.hardwareConcurrency) <= 4;
+  const frameInterval = lowPowerRenderer ? 1000 / 30 : 0;
   let renderer;
   let scene;
   let camera;
@@ -64,6 +69,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   let robot;
   let grid;
   let animationFrame;
+  let lastRenderedAt = 0;
   let rendering = false;
   let loaded = false;
   let hoveredMeshUuid = '';
@@ -280,9 +286,11 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     camera.updateProjectionMatrix();
   }
 
-  function animate() {
+  function animate(now) {
     if (!rendering) return;
     animationFrame = requestAnimationFrame(animate);
+    if (frameInterval && now - lastRenderedAt < frameInterval) return;
+    lastRenderedAt = now;
     smoothJointMotion();
     controls?.update();
     renderer?.render(scene, camera);
@@ -293,6 +301,7 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
   function resume() {
     if (rendering || !renderer) return;
     rendering = true;
+    lastRenderedAt = 0;
     animate();
   }
 
@@ -307,8 +316,8 @@ export function createRobotViewer({ canvasHost, loadingEl, statusEl, faultsEl, t
     scene = new THREE.Scene();
     scene.fog = new THREE.Fog('#1c2025', 6, 13);
     camera = new THREE.PerspectiveCamera(38, 1, 0.01, 100);
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer = new THREE.WebGLRenderer({ antialias: !lowPowerRenderer, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPowerRenderer ? 1 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     canvasHost.appendChild(renderer.domElement);
     renderer.domElement.addEventListener('pointermove', showTooltip);

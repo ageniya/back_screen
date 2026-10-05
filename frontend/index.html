@@ -24,6 +24,7 @@
       <span id="clockDisplay">14:23</span>
       <span id="networkIp">IP 192.168.1.10</span>
       <span class="data-source demo" id="dataSource">演示数据</span>
+      <span class="data-freshness" id="dataFreshness">数据状态 --</span>
     </div>
   </div>
 
@@ -74,17 +75,17 @@
 
       <!-- Row 3: Joint Angles + Load -->
       <div class="card joint-row">
-        <span class="joint-item"><span class="joint-label">J1</span> <span id="joint1">15°</span></span>
+        <span class="joint-item"><span class="joint-label" id="jointLabel1">关节 1</span> <span id="joint1">--</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J2</span> <span id="joint2">23°</span></span>
+        <span class="joint-item"><span class="joint-label" id="jointLabel2">关节 2</span> <span id="joint2">--</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J3</span> <span id="joint3">-8°</span></span>
+        <span class="joint-item"><span class="joint-label" id="jointLabel3">关节 3</span> <span id="joint3">--</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J4</span> <span id="joint4">42°</span></span>
+        <span class="joint-item"><span class="joint-label" id="jointLabel4">关节 4</span> <span id="joint4">--</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J5</span> <span id="joint5">11°</span></span>
+        <span class="joint-item"><span class="joint-label" id="jointLabel5">关节 5</span> <span id="joint5">--</span></span>
         <span class="joint-divider"></span>
-        <span class="joint-item"><span class="joint-label">J6</span> <span id="joint6">5°</span></span>
+        <span class="joint-item"><span class="joint-label" id="jointLabel6">关节 6</span> <span id="joint6">--</span></span>
         <div class="joint-meta">
           <span>负载 <span class="meta-value" id="payload">2.3kg</span></span>
           <span class="joint-divider"></span>
@@ -135,7 +136,7 @@
       <!-- Row 6: Action Buttons -->
       <div class="action-row">
         <button class="btn btn-primary btn-diagnose" id="btnDiagnose" onclick="startDiagnose()">
-          &#x1F504; 一键诊断
+          &#x1F504; 刷新诊断
         </button>
         <button class="btn btn-danger" id="btnFaultClear" onclick="clearFault()">
           &#x2713; 确认已恢复
@@ -143,6 +144,10 @@
         <button class="btn btn-stop" id="btnSoftStop" disabled title="软件停止尚未启用，请使用机器人实体急停按钮">
           &#x26D4; 软件停止未启用
         </button>
+      </div>
+
+      <div class="data-note" id="dataQualityNote">
+        数据说明：只展示已收到的真实数据；<b>--</b> 表示未接入或当前无消息，<b>0.0</b> 表示收到的真实数值为零。
       </div>
 
       <!-- Row 7: Alert Banner -->
@@ -357,21 +362,21 @@
 
   <!-- ========== BOTTOM NAV ========== -->
   <div class="bottom-nav">
-    <button class="nav-tab active" data-tab="status" onclick="switchTab('status', this)">
+    <a class="nav-tab active" data-tab="status" href="#tab-status">
       &#x1F4CA; 状态
-    </button>
-    <button class="nav-tab" data-tab="alerts" onclick="switchTab('alerts', this)">
+    </a>
+    <a class="nav-tab" data-tab="alerts" href="#tab-alerts">
       &#x1F514; 告警
-    </button>
-    <button class="nav-tab" data-tab="logs" onclick="switchTab('logs', this)">
+    </a>
+    <a class="nav-tab" data-tab="logs" href="#tab-logs">
       &#x1F4DD; 日志
-    </button>
-    <button class="nav-tab" data-tab="detail" onclick="switchTab('detail', this)">
+    </a>
+    <a class="nav-tab" data-tab="detail" href="#tab-detail">
       &#x1F4CB; 作业总结
-    </button>
-    <button class="nav-tab" data-tab="tools" onclick="switchTab('tools', this)">
+    </a>
+    <a class="nav-tab" data-tab="tools" href="#tab-tools">
       &#x2699;&#xFE0F; 工具
-    </button>
+    </a>
   </div>
 
 </div><!-- /screen -->

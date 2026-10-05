@@ -35,6 +35,10 @@
   .data-source.waiting { color: #FADB14; background: rgba(250,219,20,0.12); }
   .data-source.connected { color: #52C41A; background: rgba(82,196,26,0.12); }
   .data-source.offline { color: #FF4D4F; background: rgba(255,77,79,0.12); }
+  .data-freshness { color: #AAAAAA; font-size: 10px; white-space: nowrap; }
+  .data-freshness.fresh { color: #52C41A; }
+  .data-freshness.stale { color: #FADB14; }
+  .data-freshness.offline { color: #FF4D4F; }
   .top-bar .status-dot {
     width: 10px; height: 10px; border-radius: 50%;
     background: #52C41A;
@@ -149,6 +153,22 @@
   .battery-row .batt-value { color: #52C41A; }
   .battery-row .batt-divider { color: #333333; }
 
+  .data-note {
+    min-height: 25px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    margin: -2px 0 5px;
+    border-left: 2px solid #555555;
+    color: #8E8E8E;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .data-note.waiting { border-left-color: #FADB14; color: #D2B94A; }
+  .data-note.stale { border-left-color: #FADB14; color: #FADB14; }
+  .data-note.offline { border-left-color: #FF4D4F; color: #FF7875; }
+  .data-note.fresh { border-left-color: #52C41A; color: #A7D896; }
+
   /* --- Row 5: Sensor Status (44px) --- */
   .sensor-row {
     height: 44px;
@@ -240,9 +260,19 @@
     font-family: inherit;
     transition: color 0.2s, background 0.2s;
     gap: 4px;
+    text-decoration: none;
   }
   .nav-tab:hover  { color: #FFFFFF; }
   .nav-tab.active { color: #1890FF; border-bottom: 2px solid #1890FF; font-weight: 600; }
+
+  /* 底部导航的原生链接兜底：即使触摸环境中的 JS 回调异常，浏览器仍会
+     更新锚点并仅通过 CSS 切换页面。Firefox 121+ 支持 :has()。 */
+  body:has(.tab-content:target) .tab-content { display: none !important; }
+  body:has(#tab-status:target) #tab-status,
+  body:has(#tab-alerts:target) #tab-alerts,
+  body:has(#tab-logs:target) #tab-logs,
+  body:has(#tab-detail:target) #tab-detail,
+  body:has(#tab-tools:target) #tab-tools { display: flex !important; }
 
   /* ========== TAB CONTENT PLACEHOLDER ========== */
   .tab-content { flex: 1; display: flex; flex-direction: column; }

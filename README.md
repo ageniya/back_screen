@@ -65,6 +65,8 @@ http://127.0.0.1:5173/?api=http://127.0.0.1:8000/api/v1
 ## 相关文档
 
 - [系统结构](docs/ARCHITECTURE.md)
+- [背屏交付与使用手册](docs/背屏交付与使用手册.md)
+- [视频包交付测试](docs/视频包交付测试.md)
 - [前后端接口契约](docs/ROBOT_API_CONTRACT.md)
 - [后端小白指南](docs/backend/BACKEND_GUIDE.md)
 - [ROS 主分支字段映射](docs/backend/ROS_MAIN_FIELD_MAPPING.md)

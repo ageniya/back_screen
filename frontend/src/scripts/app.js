@@ -118,21 +118,35 @@ function isDemoMode() {
   // ==================== TAB SWITCHING ====================
   function switchTab(tabId, btn) {
     // 离开工具页时暂停隐藏的 3D WebGL 渲染，避免在状态页仍占用 Pico CPU。
-    if (tabId !== 'tools' && robot3dViewer) robot3dViewer.pause();
+    // 3D 初始化/销毁异常不能影响最基本的页面导航。
+    if (tabId !== 'tools' && robot3dViewer && typeof robot3dViewer.pause === 'function') {
+      try { robot3dViewer.pause(); } catch (error) { console.warn('暂停 3D 视图失败，不影响切页：', error); }
+    }
     // Hide all tab contents
     var contents = document.querySelectorAll('.tab-content');
     contents.forEach(function(c) { c.style.display = 'none'; });
     // Show selected
-    document.getElementById('tab-' + tabId).style.display = 'flex';
+    var selectedContent = document.getElementById('tab-' + tabId);
+    if (!selectedContent) return;
+    selectedContent.style.display = 'flex';
 
     // Update nav active state
     var tabs = document.querySelectorAll('.nav-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    btn.classList.add('active');
+    if (btn) btn.classList.add('active');
 
     // Initialize page-specific logic when opened
     if (tabId === 'alerts') initAlertsView();
     if (tabId === 'detail') { renderSummary(); requestWorkSummary(); }
+    // 3D 视图仍处于工具页内。离开工具页时已暂停 WebGL 以节省 Pico
+    // 性能；切回工具页时若该视图此前打开，必须在容器重新可见后恢复渲染
+    // 与尺寸计算，否则 OrbitControls 虽收到鼠标事件却没有新画面可绘制。
+    if (tabId === 'tools' && robot3dViewer) {
+      var robot3dView = document.getElementById('robot3dView');
+      if (robot3dView && robot3dView.style.display !== 'none') {
+        requestAnimationFrame(function() { robot3dViewer.open(); });
+      }
+    }
   }
 
   // ==================== DIAGNOSE BUTTON ====================
@@ -148,14 +162,14 @@ function isDemoMode() {
         btn.innerHTML = '&#x2705; 诊断完成';
         addDemoAlert('warning');
         addLog('info', '诊断', '演示诊断已完成，并注入一条模拟告警', '演示控制');
-        setTimeout(function() { btn.innerHTML = '&#x1F504; 一键诊断'; }, 2000);
+        setTimeout(function() { btn.innerHTML = '&#x1F504; 刷新诊断'; }, 2000);
       }, 1200);
       return;
     }
-    invokeRobotCommand('/commands/diagnose', {}, '已请求一键诊断').then(function(success) {
+    invokeRobotCommand('/commands/diagnose', {}, '已刷新当前已接入数据的诊断结果').then(function(success) {
       btn.disabled = false;
-      btn.innerHTML = success ? '&#x2705; 已请求诊断' : '&#x26A0; 诊断未接入';
-      setTimeout(function() { btn.innerHTML = '&#x1F504; 一键诊断'; }, 2000);
+      btn.innerHTML = success ? '&#x2705; 诊断已刷新' : '&#x26A0; 诊断未接入';
+      setTimeout(function() { btn.innerHTML = '&#x1F504; 刷新诊断'; }, 2000);
     });
   }
 
@@ -848,6 +862,35 @@ function isDemoMode() {
     el.textContent = labels[state] || labels.demo;
   }
 
+  function setDataFreshness(status) {
+    var el = document.getElementById('dataFreshness');
+    var note = document.getElementById('dataQualityNote');
+    if (!el) return;
+    var age = Number(status && status.lastMessageAgeSeconds);
+    el.className = 'data-freshness';
+    if (note) note.className = 'data-note';
+    if (!status || status.telemetryMode === 'mock') {
+      el.textContent = '演示数据';
+      if (note) note.textContent = '当前为演示数据，不代表机器人实时状态。';
+      return;
+    }
+    if (status.dataReady !== true || !Number.isFinite(age)) {
+      el.classList.add('stale');
+      el.textContent = '等待 ROS 数据';
+      if (note) { note.classList.add('waiting'); note.textContent = '等待 ROS 数据：后端已启动，但尚未收到任何实机消息。'; }
+      return;
+    }
+    if (age > 5) {
+      el.classList.add('stale');
+      el.textContent = '数据过期 ' + age.toFixed(1) + 's';
+      if (note) { note.classList.add('stale'); note.textContent = '数据已过期：最后一帧来自 ' + age.toFixed(1) + ' 秒前，请检查对应 ROS 节点。'; }
+      return;
+    }
+    el.classList.add('fresh');
+    el.textContent = '更新 ' + age.toFixed(1) + 's 前';
+    if (note) { note.classList.add('fresh'); note.innerHTML = '数据正常更新；<b>--</b> 表示未接入或当前无消息，<b>0.0</b> 表示收到的真实数值为零。'; }
+  }
+
   function activateDemoFallback() {
     if (ROBOT_DATA_ADAPTER) return;
     DEMO_FALLBACK_ACTIVE = true;
@@ -947,8 +990,30 @@ function isDemoMode() {
     return Number.isFinite(number) ? number.toFixed(1) + (suffix || '') : String(value) + (suffix || '');
   }
 
+  function displayJointName(name) {
+    var names = {
+      Shoulder_Y_L: '左肩 Y', Shoulder_X_L: '左肩 X', Shoulder_Z_L: '左肩 Z', Elbow_L: '左肘', Wrist_Z_L: '左腕 Z', Wrist_Y_L: '左腕 Y', Wrist_X_L: '左腕 X',
+      Shoulder_Y_R: '右肩 Y', Shoulder_X_R: '右肩 X', Shoulder_Z_R: '右肩 Z', Elbow_R: '右肘', Wrist_Z_R: '右腕 Z', Wrist_Y_R: '右腕 Y', Wrist_X_R: '右腕 X',
+      Neck_Z: '颈部 Z', Neck_Y: '颈部 Y', Lifting_Z: '升降轴'
+    };
+    return names[name] || name || '--';
+  }
+
   function setBatteryRowLabels(labels) {
     labels.forEach(function(label, index) { setText('batteryLabel' + (index + 1), label); });
+  }
+
+  function setResourceAlertText(elementId, hasAlert, unavailable) {
+    var element = document.getElementById(elementId);
+    if (!element) return;
+    if (unavailable) {
+      element.textContent = '--';
+      element.style.color = '#AAAAAA';
+      return;
+    }
+    element.textContent = hasAlert ? '存在告警' : '正常';
+    // 不继承演示模式初始页面写入的黄色；资源告警统一为红/绿两种语义。
+    element.style.color = hasAlert ? '#FF4D4F' : '#52C41A';
   }
 
   function renderBatteryOrSystemResource(data, battery) {
@@ -967,25 +1032,28 @@ function isDemoMode() {
       return;
     }
     if (orinResourceRow) orinResourceRow.classList.add('resource-row');
-    var errors = (data.diagnosticMetrics || {}).systemResourceErrors || {};
+    // 原始资源标志可能每一帧跳变。资源栏只使用后端确认满 5 秒后的结果，
+    // 与“当前告警”使用完全相同的判定口径。
+    var errors = (data.resourceAlerts || {}).orin || {};
     setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
     setText('batteryLevel', displayNumber(metrics.cpuUsage, '%'));
     setText('batteryVoltage', displayNumber(metrics.memoryUsage));
     setText('batteryCurrent', displayNumber(metrics.diskUsage));
     setText('batteryTemperature', displayNumber(metrics.gpuUsage, '%'));
     setText('cellVoltage', displayNumber(metrics.temperature, '°C'));
-    setText('chargeStatus', Object.keys(errors).some(function(key) { return errors[key] === true; }) ? '存在告警' : '正常');
+    setResourceAlertText('chargeStatus', Object.keys(errors).some(function(key) { return errors[key] === true; }));
     setText('chargeCycles', 'Orin');
   }
 
   function renderPicoResource(data) {
     var metrics = (data.diagnosticMetrics || {}).picoResource;
-    var errors = (data.diagnosticMetrics || {}).picoResourceErrors || {};
+    // 原始资源标志可能每一帧跳变。资源栏只使用后端确认满 5 秒后的结果。
+    var errors = (data.resourceAlerts || {}).pico || {};
     var hasMetrics = metrics && Object.keys(metrics).some(function(key) { return metrics[key] !== null && metrics[key] !== undefined; });
     if (!hasMetrics) {
       setText('picoCpu', '暂未接入');
       ['picoMemory', 'picoDisk', 'picoGpu', 'picoTemperature'].forEach(function(id) { setText(id, '--'); });
-      setText('picoResourceError', '--');
+      setResourceAlertText('picoResourceError', false, true);
       setText('picoResourceSource', '--');
       return;
     }
@@ -994,7 +1062,7 @@ function isDemoMode() {
     setText('picoDisk', displayNumber(metrics.diskUsage));
     setText('picoGpu', displayNumber(metrics.gpuUsage, '%'));
     setText('picoTemperature', displayNumber(metrics.temperature, '°C'));
-    setText('picoResourceError', Object.keys(errors).some(function(key) { return errors[key] === true; }) ? '存在告警' : '正常');
+    setResourceAlertText('picoResourceError', Object.keys(errors).some(function(key) { return errors[key] === true; }));
     setText('picoResourceSource', 'Pico');
   }
 
@@ -1019,7 +1087,13 @@ function isDemoMode() {
     renderBatteryOrSystemResource(data, battery);
     renderPicoResource(data);
     var joints = motion.joints || data.joints || [];
-    for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) { var jointValue = joints[jointIndex]; setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(1) + '°' : displayValue(jointValue)); }
+    var jointSummary = motion.jointSummary || [];
+    for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) {
+      var summaryItem = jointSummary[jointIndex] || {};
+      var jointValue = summaryItem.degrees !== undefined ? summaryItem.degrees : joints[jointIndex];
+      setText('jointLabel' + (jointIndex + 1), summaryItem.name ? displayJointName(summaryItem.name) : '关节 ' + (jointIndex + 1));
+      setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(1) + '°' : displayValue(jointValue));
+    }
     setText('payload', displayNumber(data.payloadKg, 'kg'));
     setText('gripForce', displayNumber(data.gripForceN, 'N'));
     setText('operationMode', displayValue(data.operationMode));
@@ -1074,6 +1148,7 @@ function isDemoMode() {
       return res.json();
     }).then(function(status) {
       deactivateDemoFallback();
+      setDataFreshness(status);
       if (status.telemetryMode === 'ros' && status.dataReady === true) {
         setDataSourceState('connected');
       } else if (status.telemetryMode === 'ros') {
@@ -1086,6 +1161,10 @@ function isDemoMode() {
     }).catch(function() {
       activateDemoFallback();
       setDataSourceState('offline');
+      var freshness = document.getElementById('dataFreshness');
+      if (freshness) { freshness.className = 'data-freshness offline'; freshness.textContent = '后端离线'; }
+      var note = document.getElementById('dataQualityNote');
+      if (note) { note.className = 'data-note offline'; note.textContent = '后端离线：当前页面不能代表机器人实时状态。'; }
     });
   }
 
@@ -1129,6 +1208,26 @@ function isDemoMode() {
   function softEmergencyStop() { if (confirm('确认急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求急停'); }
   function exportLogs() { var text = localLogs.map(function(log) { return [log.time, log.label, log.text, log.source].join(','); }).join('\n'); var blob = new Blob(['时间,等级,内容,来源\n' + text], {type:'text/csv;charset=utf-8'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'R1-diagnostic-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }
   renderLogs();
+
+  // Pico 的 Firefox/触摸驱动有时只会可靠地产生按下事件：按钮会出现
+  // :active 高亮，但不会随后合成 pointerup/click。因此导航以按下事件
+  // 为主，其他事件只是电脑端与旧驱动的兼容兜底。
+  document.querySelectorAll('.nav-tab').forEach(function(tab) {
+    var lastActivationAt = 0;
+    function activate(event) {
+      // 多种事件可能连续到达；短时间去重以免重复初始化页面。
+      var now = Date.now();
+      if (now - lastActivationAt < 350) return;
+      lastActivationAt = now;
+      switchTab(tab.dataset.tab, tab);
+    }
+    tab.addEventListener('pointerdown', activate);
+    tab.addEventListener('mousedown', activate);
+    tab.addEventListener('touchstart', activate, { passive: true });
+    tab.addEventListener('pointerup', activate);
+    tab.addEventListener('click', activate);
+  });
+
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) {
     requestBackendHealth();
     requestSnapshot();
