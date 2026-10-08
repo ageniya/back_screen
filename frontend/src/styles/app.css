@@ -259,10 +259,13 @@
     .health-row .health-text { font-size: 16px; }
     .health-row .health-right { gap: 10px; font-size: 11px; }
     .motion-row { height: 60px; font-size: 12px; }
-    .joint-row { height: 42px; gap: 3px; font-size: 11px; }
-    .joint-row .joint-label, .joint-row .joint-meta { font-size: 10px; }
-    .joint-row .joint-divider { margin: 0 2px; }
-    .joint-row .joint-meta { gap: 7px; }
+    /* 800px 宽度不足以让 6 个关节和运行元数据共用一行。关节置顶，
+       负载/左右腕力/模式单独占第二行，避免右侧被 overflow 截掉。 */
+    .joint-row { height: 58px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: 1fr 1fr; gap: 0 3px; font-size: 10px; }
+    .joint-row .joint-item { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .joint-row .joint-label, .joint-row .joint-meta { font-size: 9px; }
+    .joint-row > .joint-divider { display: none; }
+    .joint-row .joint-meta { grid-column: 1 / -1; margin-left: 0; gap: 13px; justify-content: flex-end; }
     .battery-row { height: 38px; gap: 6px; font-size: 10px; }
     .resource-row { gap: 4px; font-size: 10px; }
     .sensor-row { height: 32px; gap: 7px; font-size: 10px; overflow: hidden; }
