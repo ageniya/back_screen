@@ -692,7 +692,8 @@ function isDemoMode() {
     setText('uptime', demoValue('demoUptime'));
     setText('remainingTime', demoValue('demoRemainingTime') + 'm');
     setText('payload', demoValue('demoPayload') + 'kg');
-    setText('gripForce', demoValue('demoGripForce') + 'N');
+    setText('leftGripForce', demoValue('demoGripForce') + 'N');
+    setText('rightGripForce', demoValue('demoGripForce') + 'N');
     setText('operationMode', demoValue('demoOperationMode'));
     setText('networkIp', 'IP ' + demoValue('demoNetworkIp'));
     for (var i = 1; i <= 6; i++) setText('joint' + i, demoValue('demoJoint' + i) + '°');
@@ -1096,7 +1097,15 @@ function isDemoMode() {
       setText('joint' + (jointIndex + 1), typeof jointValue === 'number' ? jointValue.toFixed(1) + '°' : displayValue(jointValue));
     }
     setText('payload', displayNumber(data.payloadKg, 'kg'));
-    setText('gripForce', displayNumber(data.gripForceN, 'N'));
+    // 当前实机没有提供已经标定的夹爪压力。这里展示左右腕部六维力的合力，
+    // 让两只手各自有实时数值；它是腕部受力，不应和未来的手指夹爪压力混用。
+    ['left', 'right'].forEach(function(side) {
+      var force = wristForces[side] && wristForces[side].force;
+      var components = force ? [Number(force.x), Number(force.y), Number(force.z)] : [];
+      var hasForce = components.length === 3 && components.every(Number.isFinite);
+      var magnitude = hasForce ? Math.sqrt(components[0] * components[0] + components[1] * components[1] + components[2] * components[2]) : null;
+      setText(side === 'left' ? 'leftGripForce' : 'rightGripForce', displayNumber(magnitude, 'N'));
+    });
     setText('operationMode', displayValue(data.operationMode));
     var network = data.network || {};
     var ipText = [];
