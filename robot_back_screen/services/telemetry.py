@@ -336,7 +336,11 @@ class RosTelemetryProvider:
         # 改为低频检查各话题是否有发布者，显示“相机驱动/话题在线”。
         depth_topic = os.getenv("ROS_DEPTH_CAMERA_TOPIC", "").strip()
         camera_topic = os.getenv("ROS_CAMERA_TOPIC", "").strip()
-        left_wrist_camera_topic = os.getenv("ROS_LEFT_WRIST_CAMERA_TOPIC", "").strip()
+        # 左腕彩色相机是当前实机已经确认的话题；默认纳入在线检测，仍可通过
+        # 环境变量覆盖。这里只检查发布者，不订阅高带宽图像帧。
+        left_wrist_camera_topic = os.getenv(
+            "ROS_LEFT_WRIST_CAMERA_TOPIC", f"{ns}/sensor/left_wrist/color/image_raw"
+        ).strip()
         right_wrist_camera_topic = os.getenv("ROS_RIGHT_WRIST_CAMERA_TOPIC", "").strip()
         self._camera_topics = {
             name: topic for name, topic in {
