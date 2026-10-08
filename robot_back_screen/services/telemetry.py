@@ -383,9 +383,10 @@ class RosTelemetryProvider:
         self._last_data_at = now
         self._active_sources[source] = now
 
-    def _mark_seen_locked(self, name: str) -> None:
+    def _mark_seen_locked(self, name: str, *, counts_as_robot_data: bool = True) -> None:
         self._last_seen[name] = time.monotonic()
-        self._mark_data_received_locked(name)
+        if counts_as_robot_data:
+            self._mark_data_received_locked(name)
 
     def _refresh_network(self) -> None:
         """Read the local NIC state; it never changes robot configuration."""
@@ -423,7 +424,9 @@ class RosTelemetryProvider:
                 "linkState": link_state or "unknown",
             }
             if online:
-                self._mark_seen_locked("network")
+                # 本机网卡在线只能说明运行背屏的电脑联网，不能代表已经
+                # 收到了机器人 ROS 消息，更不能使页面显示“数据已接入”。
+                self._mark_seen_locked("network", counts_as_robot_data=False)
             else:
                 self._last_seen["network"] = time.monotonic() - self._sensor_timeout - 1
 
@@ -436,7 +439,9 @@ class RosTelemetryProvider:
                 continue
             with self._lock:
                 if online:
-                    self._mark_seen_locked(name)
+                    # 这里只检查 ROS 图里是否存在相机发布者，没有读取任何
+                    # 图像帧；它是传感器在线提示，不作为实机数据接收依据。
+                    self._mark_seen_locked(name, counts_as_robot_data=False)
                 else:
                     self._last_seen[name] = time.monotonic() - self._sensor_timeout - 1
 
