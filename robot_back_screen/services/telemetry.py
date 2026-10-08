@@ -511,17 +511,33 @@ class RosTelemetryProvider:
 
     def _on_battery(self, message: Any) -> None:
         percent = self._number(message.percentage)
+        voltage = self._number(message.voltage)
+        current = self._number(message.current)
+        temperature = self._number(message.temperature)
         cell_values = [value for value in (self._number(item) for item in getattr(message, "cell_voltage", [])) if value is not None]
         status_names = {0: "未知", 1: "充电中", 2: "放电中", 3: "未充电", 4: "已充满"}
+        # 实机 BMS 未完成初始化时会发布一帧 BatteryState 默认值：电量、
+        # 电压、电流均为 0，temperature 甚至可能是未初始化内存中的极大数。
+        # 已上电机器人不可能有 0V 电池包，因此将这一整帧视为“无有效数据”，
+        # 让页面显示 --，避免误导为电池真的耗尽或温度异常。
+        valid_pack = voltage is not None and voltage > 1.0
+        if not valid_pack:
+            percent = voltage = current = temperature = None
+            cell_values = []
+        elif temperature is not None and not -40.0 <= temperature <= 100.0:
+            # BatteryState 的温度单位为 °C；超出工程可用范围的值直接丢弃。
+            temperature = None
+        charge_status = status_names.get(int(message.power_supply_status), "未知") if valid_pack else None
         with self._lock:
-            self._mark_data_received_locked("battery")
+            if valid_pack:
+                self._mark_data_received_locked("battery")
             self._snapshot["battery"].update({
                 "percent": round(percent * 100, 1) if percent is not None else None,
-                "voltage": self._number(message.voltage),
-                "current": self._number(message.current),
-                "temperature": self._number(message.temperature),
+                "voltage": voltage,
+                "current": current,
+                "temperature": temperature,
                 "cellVoltage": round(sum(cell_values) / len(cell_values), 3) if cell_values else None,
-                "chargeStatus": status_names.get(int(message.power_supply_status), "未知"),
+                "chargeStatus": charge_status,
             })
 
     def _on_robot_state(self, message: Any) -> None:
