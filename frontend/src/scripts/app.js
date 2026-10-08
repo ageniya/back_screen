@@ -1077,7 +1077,7 @@ function isDemoMode() {
     if (robot3dPage && robot3dPage.style.display !== 'none') renderRobot3DDataPanels();
     if (robot3dViewer) robot3dViewer.updateJointPositions(data);
     var health = data.health || {};
-    var motion = data.motion || {}, battery = data.battery || {};
+    var motion = data.motion || {}, battery = data.battery || {}, wristForces = data.wristForces || {};
     setText('robotModel', displayValue(data.robotModel || (data.identity && data.identity.model)));
     setText('currentPosition', displayValue(motion.position)); setText('currentSpeed', displayValue(motion.speed)); setText('targetPosition', displayValue(motion.target));
     // 老接口只有 tcp 时不猜测它属于哪一只手；左右手字段齐全后才展示实时值。
