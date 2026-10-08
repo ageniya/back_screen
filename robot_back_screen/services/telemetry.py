@@ -341,7 +341,11 @@ class RosTelemetryProvider:
         left_wrist_camera_topic = os.getenv(
             "ROS_LEFT_WRIST_CAMERA_TOPIC", f"{ns}/sensor/left_wrist/color/image_raw"
         ).strip()
-        right_wrist_camera_topic = os.getenv("ROS_RIGHT_WRIST_CAMERA_TOPIC", "").strip()
+        # 左右腕相机均已在 Pico 实机确认，默认纳入在线检测。背屏只查询
+        # 发布者状态，不订阅 Image 内容，避免影响 Pico 的渲染和总线带宽。
+        right_wrist_camera_topic = os.getenv(
+            "ROS_RIGHT_WRIST_CAMERA_TOPIC", f"{ns}/sensor/right_wrist/color/image_raw"
+        ).strip()
         self._camera_topics = {
             name: topic for name, topic in {
                 "depthCamera": depth_topic,
