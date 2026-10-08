@@ -1215,7 +1215,6 @@ function isDemoMode() {
     }).catch(function() { alert('命令未执行，请检查实机连接和权限。'); return false; });
   }
 
-  function softEmergencyStop() { if (confirm('确认急停？机器人将停止当前运动。')) invokeRobotCommand('/commands/soft-stop', {}, '已请求急停'); }
   function exportLogs() { var text = localLogs.map(function(log) { return [log.time, log.label, log.text, log.source].join(','); }).join('\n'); var blob = new Blob(['时间,等级,内容,来源\n' + text], {type:'text/csv;charset=utf-8'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'R1-diagnostic-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }
   renderLogs();
 
@@ -1257,7 +1256,6 @@ function isDemoMode() {
     switchTab: switchTab,
     startDiagnose: startDiagnose,
     clearFault: clearFault,
-    softEmergencyStop: softEmergencyStop,
     goToAlerts: goToAlerts,
     investigateAlert: investigateAlert,
     resolveAlert: resolveAlert,
