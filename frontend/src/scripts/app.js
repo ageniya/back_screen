@@ -1036,9 +1036,7 @@ function isDemoMode() {
     // 原始资源标志可能每一帧跳变。资源栏只使用后端确认满 5 秒后的结果，
     // 与“当前告警”使用完全相同的判定口径。
     var errors = (data.resourceAlerts || {}).orin || {};
-    // 资源话题提供的是各热源中的最高读数，不是电池温度；明确标注，避免
-    // 用户将此处与电池行的“温度”混淆。
-    setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '最高温度', '资源告警', '数据源']);
+    setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
     setText('batteryLevel', displayNumber(metrics.cpuUsage, '%'));
     setText('batteryVoltage', displayNumber(metrics.memoryUsage));
     setText('batteryCurrent', displayNumber(metrics.diskUsage));
