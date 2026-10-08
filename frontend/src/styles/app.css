@@ -242,6 +242,40 @@
   }
   .alert-banner:hover { background: rgba(255,77,79,0.25); }
 
+  /* Pico 背屏为 800×600。常规桌面尺寸会让状态页底部被 overflow:hidden
+     截断，因此在小屏上压缩各行高度和间距，保持底部导航始终可见。 */
+  @media (max-width: 900px), (max-height: 650px) {
+    .top-bar { height: 36px; padding: 0 8px; }
+    .top-bar .robot-name { font-size: 13px; }
+    .top-bar .center { font-size: 11px; }
+    .top-bar .right { gap: 7px; font-size: 10px; }
+    .top-bar .right #networkIp { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-source { font-size: 9px; padding: 2px 4px; }
+    .main-content { height: calc(100vh - 72px); padding: 5px 6px; gap: 4px; }
+    .card { padding: 5px 8px; }
+    .health-row { height: 42px; }
+    .health-row .big-dot { width: 32px; height: 32px; }
+    .health-row .health-left { gap: 8px; }
+    .health-row .health-text { font-size: 16px; }
+    .health-row .health-right { gap: 10px; font-size: 11px; }
+    .motion-row { height: 60px; font-size: 12px; }
+    .joint-row { height: 42px; gap: 3px; font-size: 11px; }
+    .joint-row .joint-label, .joint-row .joint-meta { font-size: 10px; }
+    .joint-row .joint-divider { margin: 0 2px; }
+    .joint-row .joint-meta { gap: 7px; }
+    .battery-row { height: 38px; gap: 6px; font-size: 10px; }
+    .resource-row { gap: 4px; font-size: 10px; }
+    .sensor-row { height: 32px; gap: 7px; font-size: 10px; overflow: hidden; }
+    .sensor-row .sensor-item { gap: 3px; white-space: nowrap; }
+    .sensor-row .sensor-dot { width: 7px; height: 7px; }
+    .action-row { height: 46px; gap: 8px; }
+    .btn { height: 38px; font-size: 13px; }
+    .data-note { min-height: 18px; margin: -1px 0 1px; padding: 0 5px; font-size: 9px; }
+    .alert-banner { height: 34px; padding: 0 8px; font-size: 11px; }
+    .bottom-nav { height: 36px; }
+    .nav-tab { font-size: 12px; }
+  }
+
   /* ========== BOTTOM NAV (44px) ========== */
   .bottom-nav {
     height: 44px;
