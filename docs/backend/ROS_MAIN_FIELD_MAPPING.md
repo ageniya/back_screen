@@ -16,11 +16,11 @@ ROS 适配器优先读取 `ROBOT_NAME`，也可通过 `ROS_NAMESPACE` 显式覆�
 | 机器人状态 | `/zj_humanoid/robot/robot_state` | 读取 `state`、`state_info`，用于运行/停止/故障状态。 |
 | 作业模式、任务、进度 | 待实机确认 | 当前实际对外接口文档未列出统一作业状态 topic。 |
 | 电量、电压、电流、温度 | Pico：`/robot/battery_state`；WA：`/robot/battery_info` | 两者均为标准 `sensor_msgs/BatteryState`；`percentage` 为 0~1，后端转换为百分比。 |
-| 关节角度、3D 姿态 | 待实机确认 | 当前实际对外接口文档未展示上肢关节状态 topic。 |
-| 左右手 TCP 位姿 | 待实机确认 | 当前实际对外接口文档未展示上肢末端位姿 topic，不猜测名称。 |
+| 关节角度、3D 姿态 | `/zj_humanoid/upperlimb/joint_states` | `sensor_msgs/msg/JointState`，已确认实际接口；需要底层 SDK 与上肢节点完成初始化后发布。 |
+| 左右手 TCP 位姿 | `/zj_humanoid/upperlimb/tcp_pose/left_arm`、`right_arm` | `upperlimb_msgs/msg/Pose`，已确认接口，按显式部署配置订阅。 |
 | 关节温度 | `/zj_humanoid/robot/joint_motor/temperatures` | `sensor_msgs/JointState.effort` 存放温度值。 |
 | 关节错误码 | `/zj_humanoid/robot/joint_motor/errors` | `sensor_msgs/JointState.effort` 存放错误码。 |
-| 腕部六维力 | `/zj_humanoid/hand/wrist_force_sensor` | 读取 `hand_msgs/WristForceSensor`，可显示 Fx/Fy/Fz、Mx/My/Mz 或计算合力。 |
+| 腕部六维力 | `/zj_humanoid/hand/wrist_force_sensor/left`、`right` | `geometry_msgs/msg/WrenchStamped`，可显示 Fx/Fy/Fz、Mx/My/Mz 或计算腕部合力。 |
 | 底盘位置与速度 | `/chassis/odom_info` | `nav_msgs/msg/Odometry`；后端读取 `pose.pose.position` 和 `twist.twist.linear`，静止时零值正常，超过 5 秒无消息显示 `--`。 |
 | 底盘电量、电压、电流 | `/chassis/agv_state` | `chassis_msgs/msg/AGVNewState` 的 `battery_percentage`（0~1，转换为 %）、`battery_voltage`（V）、`battery_current`（A）；不推算温度或充电状态。 |
 | 底盘状态、急停反馈、碰撞反馈 | `/chassis/agv_state` | `state`、`description`、`emergency`、`collision` 写入 `diagnosticMetrics.chassisState`；碰撞反馈映射为碰撞条状态。该字段不能证明独立碰撞条硬件在线。 |
