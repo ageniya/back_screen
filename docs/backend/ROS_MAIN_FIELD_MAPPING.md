@@ -21,7 +21,9 @@ ROS 适配器优先读取 `ROBOT_NAME`，也可通过 `ROS_NAMESPACE` 显式覆�
 | 关节温度 | `/zj_humanoid/robot/joint_motor/temperatures` | `sensor_msgs/JointState.effort` 存放温度值。 |
 | 关节错误码 | `/zj_humanoid/robot/joint_motor/errors` | `sensor_msgs/JointState.effort` 存放错误码。 |
 | 腕部六维力 | `/zj_humanoid/hand/wrist_force_sensor` | 读取 `hand_msgs/WristForceSensor`，可显示 Fx/Fy/Fz、Mx/My/Mz 或计算合力。 |
-| 底盘位置与速度 | `/chassis/odom_info` | `nav_msgs/Odometry`；后端读取 `pose.pose.position` 和 `twist.twist.linear`。 |
+| 底盘位置与速度 | `/chassis/odom_info` | `nav_msgs/msg/Odometry`；后端读取 `pose.pose.position` 和 `twist.twist.linear`，静止时零值正常，超过 5 秒无消息显示 `--`。 |
+| 底盘电量、电压、电流 | `/chassis/agv_state` | `chassis_msgs/msg/AGVNewState` 的 `battery_percentage`（0~1，转换为 %）、`battery_voltage`（V）、`battery_current`（A）；不推算温度或充电状态。 |
+| 底盘状态、急停反馈、碰撞反馈 | `/chassis/agv_state` | `state`、`description`、`emergency`、`collision` 写入 `diagnosticMetrics.chassisState`；碰撞反馈映射为碰撞条状态。该字段不能证明独立碰撞条硬件在线。 |
 | 系统、关节、电池总体诊断 | `/diagnostics_agg` | `diagnostic_msgs/DiagnosticArray`；由官方 `diagnostic_aggregator` 汇总，作为健康状态和告警来源。 |
 | 系统资源 | `/zj_humanoid/robot/orin_states/resource` 或 `/zj_humanoid/robot/pico_states/resource` | CPU、内存、磁盘、温度、GPU 使用率。 |
 | 系统资源阈值异常 | `/zj_humanoid/robot/orin_states/errors` 或 `/zj_humanoid/robot/pico_states/errors` | 过温、CPU、内存、磁盘告警标记。 |
@@ -51,7 +53,34 @@ ROS 适配器优先读取 `ROBOT_NAME`，也可通过 `ROS_NAMESPACE` 显式覆�
 | 单体电压、充电循环次数 | 当前 `BatteryState` / 已见电源状态接口未定义这两项。 |
 | 剩余续航 | 需要产品确认估算算法（通常为剩余电量除以近一段时间平均耗电）。 |
 | 本次作业时长、搬运次数、负载汇总 | `WorkStatus` 提供任务和进度；完整统计字段需确认任务系统接口。 |
-| 碰撞条 | `main` 当前已见接口中未找到明确碰撞条状态。 |
+| 独立碰撞条硬件在线状态 | 底盘 `AGVNewState.collision` 提供整机碰撞反馈，未提供独立碰撞条设备在线位。 |
+
+## 2026-10-14 WA-T 实机底盘配置
+
+Orin 已确认实际发布 `/chassis/odom_info` 和 `/chassis/agv_state`。旧 `/web/odom_info`
+中继订阅 `/navigation/odom_info`，该上游当前无发布者，因此背屏直接订阅底盘原始话题：
+
+```bash
+export ROS_ODOM_TOPICS=/chassis/odom_info
+export ROS_CHASSIS_STATE_TOPICS=/chassis/agv_state
+```
+
+Pico 缺少 `chassis_msgs` 时，可在 Pico 的背屏源码目录执行：
+
+```bash
+bash deploy/build-chassis-interface.sh /home/nav01/back-screen-preview/ros_interfaces
+source /home/nav01/back-screen-preview/ros_interfaces/install/setup.bash
+```
+
+`deploy/ros_interfaces/chassis_msgs` 只包含 Orin 已安装的 2.0.0 版 `AGVNewState`
+消息定义，用于在 Pico 本机生成对应架构的解码库；不会安装底盘驱动。已有完整
+`chassis_msgs` 包时直接使用它，不加载接口子集。实际 Pico 的 `start-screen.sh`
+已在缺少该类型时加载这个私有目录，开机启动沿用同一配置。
+
+使用仓库 `deploy/robot-back-screen.service` 部署时，也可在其 EnvironmentFile 中设置
+`ROS_INTERFACES_SETUP=/home/nav01/back-screen-preview/ros_interfaces/install/setup.bash`。
+标准 `BatteryState` 若也开始发布有效数据，可补充电池温度、单体电压和充电状态；
+这些扩展字段独立判断消息新鲜度，不能因底盘三项电池数据仍在更新而保留过期值。
 
 ## 接机实施顺序
 

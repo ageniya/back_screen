@@ -138,6 +138,10 @@ class RosTelemetryProvider:
             from rcl_interfaces.msg import Log
             from sensor_msgs.msg import BatteryState, Image, JointState, LaserScan, PointCloud2
             from std_srvs.srv import Trigger
+            try:
+                from chassis_msgs.msg import AGVNewState
+            except ImportError:
+                AGVNewState = None
             # 标准消息可独立工作：即使机器人专有消息包尚未安装，也允许先接入
             # 已确认的 sensor_msgs/JointState 上肢仿真数据。
             RobotState = BasicInfo = Errors = Resource = WorkStatus = None
@@ -255,8 +259,13 @@ class RosTelemetryProvider:
             [f"{ns}/robot/battery_state", f"{ns}/robot/battery_info"],
         ):
             self._node.create_subscription(BatteryState, topic, self._on_battery, 10)
-        for topic in configured_topics("ROS_ODOM_TOPICS", [f"{ns}/chassis/odom_info"]):
+        for topic in configured_topics("ROS_ODOM_TOPICS", ["/chassis/odom_info", f"{ns}/chassis/odom_info"]):
             self._node.create_subscription(Odometry, topic, self._on_odom, 10)
+        if AGVNewState is not None:
+            for topic in configured_topics("ROS_CHASSIS_STATE_TOPICS", ["/chassis/agv_state"]):
+                self._node.create_subscription(AGVNewState, topic, self._on_chassis_state, 10)
+        else:
+            self._node.get_logger().warning("缺少 chassis_msgs/AGVNewState，底盘电池与碰撞状态暂不可解码")
         if RobotState is not None:
             self._node.create_subscription(RobotState, f"{ns}/robot/robot_state", self._on_robot_state, 10)
         # 上肢/作业接口不在当前实际对外文档中。只有接机确认 topic 后再通过
@@ -529,6 +538,10 @@ class RosTelemetryProvider:
             temperature = None
         charge_status = status_names.get(int(message.power_supply_status), "未知") if valid_pack else None
         with self._lock:
+            if not valid_pack:
+                chassis_battery_at = self._active_sources.get("chassis_battery")
+                if chassis_battery_at is not None and time.monotonic() - chassis_battery_at <= self._data_stale_seconds:
+                    return
             if valid_pack:
                 self._mark_data_received_locked("battery")
             self._snapshot["battery"].update({
@@ -539,6 +552,29 @@ class RosTelemetryProvider:
                 "cellVoltage": round(sum(cell_values) / len(cell_values), 3) if cell_values else None,
                 "chargeStatus": charge_status,
             })
+
+    def _on_chassis_state(self, message: Any) -> None:
+        """读取实机底盘状态；电量比例为 0~1，不推测温度或充电状态。"""
+        voltage = self._number(message.battery_voltage)
+        current = self._number(message.battery_current)
+        percent = self._number(message.battery_percentage)
+        if percent is not None and not 0.0 <= percent <= 1.0:
+            percent = None
+        with self._lock:
+            self._mark_data_received_locked("chassis_state")
+            self._snapshot.setdefault("diagnosticMetrics", {})["chassisState"] = {
+                "code": int(message.state),
+                "description": str(message.description),
+                "emergency": bool(message.emergency),
+                "collision": bool(message.collision),
+            }
+            if voltage is not None and voltage > 1.0:
+                self._mark_data_received_locked("chassis_battery")
+                self._snapshot["battery"].update({
+                    "percent": round(percent * 100, 1) if percent is not None else None,
+                    "voltage": voltage,
+                    "current": current,
+                })
 
     def _on_robot_state(self, message: Any) -> None:
         state_info = str(getattr(message, "state_info", ""))
@@ -832,10 +868,20 @@ class RosTelemetryProvider:
             for name in snapshot["sensors"]:
                 seen_at = self._last_seen.get(name)
                 snapshot["sensors"][name] = None if seen_at is None else now - seen_at <= self._sensor_timeout
+            chassis_at = self._active_sources.get("chassis_state")
+            chassis = snapshot.get("diagnosticMetrics", {}).get("chassisState")
+            if chassis and chassis_at is not None:
+                fresh = now - chassis_at <= self._sensor_timeout
+                snapshot["sensors"]["bumper"] = ("triggered" if chassis["collision"] else "online") if fresh else False
+                if not fresh:
+                    snapshot["diagnosticMetrics"].pop("chassisState", None)
             # 关节、TCP 都是瞬时状态。发布者停止后不能把最后一帧（常见为
             # 全 0 的停机帧）继续冒充实时姿态，应明确交给页面显示为 --。
             motion = snapshot.get("motion")
             if isinstance(motion, dict):
+                odom_at = self._active_sources.get("odometry")
+                if odom_at is None or now - odom_at > self._data_stale_seconds:
+                    motion["position"] = motion["speed"] = None
                 joint_at = self._active_sources.get("joint_states")
                 if joint_at is None or now - joint_at > self._data_stale_seconds:
                     motion["joints"] = [None] * 6
@@ -848,6 +894,14 @@ class RosTelemetryProvider:
             upper_limb_at = self._active_sources.get("upperlimb_state")
             if upper_limb_at is None or now - upper_limb_at > self._data_stale_seconds:
                 snapshot["upperLimbState"] = None
+            battery_at = max(self._active_sources.get("battery", 0), self._active_sources.get("chassis_battery", 0))
+            if now - battery_at > self._data_stale_seconds:
+                for field in ("percent", "voltage", "current", "temperature", "cellVoltage", "chargeStatus"):
+                    snapshot["battery"][field] = None
+            elif now - self._active_sources.get("battery", 0) > self._data_stale_seconds:
+                # AGVNewState 只有三项电池读数，不能延续过期 BatteryState 的其它字段。
+                for field in ("temperature", "cellVoltage", "chargeStatus"):
+                    snapshot["battery"][field] = None
             # Pico 资源未持续发布时，不把上一次缓存误报为实时数据。
             pico_resource_at = self._active_sources.get("pico_resource")
             if pico_resource_at is None or now - pico_resource_at > self._data_stale_seconds:

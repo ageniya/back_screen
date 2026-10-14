@@ -7,7 +7,7 @@ Type=simple
 User=nav01
 WorkingDirectory=/opt/ros/humble
 EnvironmentFile=-/etc/robot-back-screen/env
-ExecStart=/bin/bash -lc 'test ! -f /etc/nav01/Middleware.env || source /etc/nav01/Middleware.env; source /opt/ros/humble/setup.bash && exec robot-back-screen-api'
+ExecStart=/bin/bash -lc 'test ! -f /etc/nav01/Middleware.env || source /etc/nav01/Middleware.env; source /opt/ros/humble/setup.bash || exit 1; if [ -n "${ROS_INTERFACES_SETUP:-}" ]; then source "$ROS_INTERFACES_SETUP" || exit 1; fi; exec robot-back-screen-api'
 Restart=on-failure
 RestartSec=2
 

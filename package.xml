@@ -12,6 +12,8 @@
   <exec_depend>diagnostic_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>chassis_msgs</exec_depend>
   <export>
     <build_type>ament_python</build_type>
   </export>
