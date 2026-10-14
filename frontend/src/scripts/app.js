@@ -1001,10 +1001,6 @@ function isDemoMode() {
     return names[name] || name || '--';
   }
 
-  function setBatteryRowLabels(labels) {
-    labels.forEach(function(label, index) { setText('batteryLabel' + (index + 1), label); });
-  }
-
   function setResourceAlertText(elementId, hasAlert, unavailable) {
     var element = document.getElementById(elementId);
     if (!element) return;
@@ -1018,54 +1014,24 @@ function isDemoMode() {
     element.style.color = hasAlert ? '#FF4D4F' : '#52C41A';
   }
 
-  function renderBatteryOrSystemResource(data, battery) {
-    var orinResourceRow = document.getElementById('orinResourceRow');
-    var hasBattery = Object.values(battery || {}).some(function(value) { return value !== null && value !== undefined && value !== ''; });
-    if (hasBattery) {
-      if (orinResourceRow) orinResourceRow.classList.remove('resource-row');
-      setBatteryRowLabels(['电量', '电压', '电流', '温度', '单体', '状态', '循环']);
-      return;
-    }
-    // 当前 Orin 没有电池消息时，展示已真实收到的计算单元资源，而不是一排 --。
-    var metrics = (data.diagnosticMetrics || {}).systemResource;
-    if (!metrics) {
-      if (orinResourceRow) orinResourceRow.classList.remove('resource-row');
-      setBatteryRowLabels(['电量', '电压', '电流', '温度', '单体', '状态', '循环']);
-      return;
-    }
-    if (orinResourceRow) orinResourceRow.classList.add('resource-row');
-    // 原始资源标志可能每一帧跳变。资源栏只使用后端确认满 5 秒后的结果，
-    // 与“当前告警”使用完全相同的判定口径。
-    var errors = (data.resourceAlerts || {}).orin || {};
-    setBatteryRowLabels(['CPU', '内存', '磁盘', 'GPU', '温度', '资源告警', '数据源']);
-    setText('batteryLevel', displayNumber(metrics.cpuUsage, '%'));
-    setText('batteryVoltage', displayNumber(metrics.memoryUsage));
-    setText('batteryCurrent', displayNumber(metrics.diskUsage));
-    setText('batteryTemperature', displayNumber(metrics.gpuUsage, '%'));
-    setText('cellVoltage', displayNumber(metrics.temperature, '°C'));
-    setResourceAlertText('chargeStatus', Object.keys(errors).some(function(key) { return errors[key] === true; }));
-    setText('chargeCycles', 'Orin');
-  }
-
-  function renderPicoResource(data) {
-    var metrics = (data.diagnosticMetrics || {}).picoResource;
+  function renderResource(data, source) {
+    var metrics = (data.diagnosticMetrics || {})[source === 'orin' ? 'systemResource' : 'picoResource'];
     // 原始资源标志可能每一帧跳变。资源栏只使用后端确认满 5 秒后的结果。
-    var errors = (data.resourceAlerts || {}).pico || {};
+    var errors = (data.resourceAlerts || {})[source] || {};
     var hasMetrics = metrics && Object.keys(metrics).some(function(key) { return metrics[key] !== null && metrics[key] !== undefined; });
     if (!hasMetrics) {
-      setText('picoCpu', '暂未接入');
-      ['picoMemory', 'picoDisk', 'picoGpu', 'picoTemperature'].forEach(function(id) { setText(id, '--'); });
-      setResourceAlertText('picoResourceError', false, true);
-      setText('picoResourceSource', '--');
+      ['Cpu', 'Memory', 'Disk', 'Gpu', 'Temperature'].forEach(function(field) { setText(source + field, '--'); });
+      setResourceAlertText(source + 'ResourceError', false, true);
+      setText(source + 'ResourceSource', '--');
       return;
     }
-    setText('picoCpu', displayNumber(metrics.cpuUsage, '%'));
-    setText('picoMemory', displayNumber(metrics.memoryUsage));
-    setText('picoDisk', displayNumber(metrics.diskUsage));
-    setText('picoGpu', displayNumber(metrics.gpuUsage, '%'));
-    setText('picoTemperature', displayNumber(metrics.temperature, '°C'));
-    setResourceAlertText('picoResourceError', Object.keys(errors).some(function(key) { return errors[key] === true; }));
-    setText('picoResourceSource', 'Pico');
+    setText(source + 'Cpu', displayNumber(metrics.cpuUsage, '%'));
+    setText(source + 'Memory', displayNumber(metrics.memoryUsage));
+    setText(source + 'Disk', displayNumber(metrics.diskUsage));
+    setText(source + 'Gpu', displayNumber(metrics.gpuUsage, '%'));
+    setText(source + 'Temperature', displayNumber(metrics.temperature, '°C'));
+    setResourceAlertText(source + 'ResourceError', Object.keys(errors).some(function(key) { return errors[key] === true; }));
+    setText(source + 'ResourceSource', source === 'orin' ? 'Orin' : 'Pico');
   }
 
   function applySnapshot(data) {
@@ -1086,8 +1052,9 @@ function isDemoMode() {
     setText('batteryLevel', displayNumber(battery.percent, '%')); setText('batteryTop', displayNumber(battery.percent, '%'));
     setText('batteryVoltage', displayNumber(battery.voltage, 'V')); setText('batteryCurrent', displayNumber(battery.current, 'A'));
     setText('batteryTemperature', displayNumber(battery.temperature, '°C')); setText('cellVoltage', displayNumber(battery.cellVoltage, 'V')); setText('chargeStatus', displayValue(battery.chargeStatus)); setText('chargeCycles', displayNumber(battery.cycles));
-    renderBatteryOrSystemResource(data, battery);
-    renderPicoResource(data);
+    // 电池和两台计算单元各自占一行，电池恢复后不能覆盖 Orin 资源。
+    renderResource(data, 'orin');
+    renderResource(data, 'pico');
     var joints = motion.joints || data.joints || [];
     var jointSummary = motion.jointSummary || [];
     for (var jointIndex = 0; jointIndex < 6; jointIndex += 1) {

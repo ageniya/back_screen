@@ -97,7 +97,7 @@
       </div>
 
       <!-- Row 4: Battery Details -->
-      <div class="card battery-row resource-row" id="orinResourceRow">
+      <div class="card battery-row" id="batteryRow">
         <span><span class="batt-label" id="batteryLabel1">电量</span> <span class="batt-value" id="batteryLevel">85%</span></span>
         <span class="batt-divider">|</span>
         <span><span class="batt-label" id="batteryLabel2">电压</span> <span class="batt-value" id="batteryVoltage">14.8V</span></span>
@@ -112,6 +112,15 @@
       </div>
 
       <!-- Orin/Pico resource comparison; Pico remains -- until its resource topic publishes. -->
+      <div class="card battery-row resource-row" id="orinResourceRow">
+        <span><span class="batt-label">CPU</span> <span class="batt-value" id="orinCpu">--</span></span>
+        <span><span class="batt-label">内存</span> <span class="batt-value" id="orinMemory">--</span></span>
+        <span><span class="batt-label">磁盘</span> <span class="batt-value" id="orinDisk">--</span></span>
+        <span><span class="batt-label">GPU</span> <span class="batt-value" id="orinGpu">--</span></span>
+        <span><span class="batt-label">温度</span> <span class="batt-value" id="orinTemperature">--</span></span>
+        <span><span class="batt-label">资源告警</span> <span class="batt-value" id="orinResourceError">--</span></span>
+        <span><span class="batt-label">数据源</span> <span class="batt-value" id="orinResourceSource">--</span></span>
+      </div>
       <div class="card battery-row resource-row" id="picoResourceRow">
         <span><span class="batt-label">CPU</span> <span class="batt-value" id="picoCpu">--</span></span>
         <span><span class="batt-label">内存</span> <span class="batt-value" id="picoMemory">--</span></span>
