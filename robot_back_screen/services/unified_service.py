@@ -25,6 +25,10 @@ class UnifiedDiagnosticsService:
         # 没有接入独立诊断引擎时，一键诊断仍可基于已收到的遥测数据
         # 进行只读检查。结果只保存在内存中，下一次检查会用新结果覆盖。
         self._builtin_alarms: list[dict[str, Any]] = []
+        self._cpu_warn_percent = float(os.getenv("ALARM_CPU_WARN_PERCENT", "95"))
+        if not 0 < self._cpu_warn_percent <= 100:
+            raise ValueError("ALARM_CPU_WARN_PERCENT 必须在 0~100 之间")
+        self._diagnosis_metrics: dict[str, Any] = {}
         # 瞬时 CPU 波动、网络重连等不应打扰现场用户。告警必须持续一段
         # 时间才进入前端；恢复后的告警则立即从当前列表移除。
         self._alarm_persist_seconds = float(os.getenv("ALARM_PERSIST_SECONDS", "5"))
@@ -51,6 +55,8 @@ class UnifiedDiagnosticsService:
         if not orin:
             return local
         merged = dict(orin)
+        if local.get("uptime") is not None:
+            merged["uptime"] = local["uptime"]
         # Keep proven Pico-only measurements. They have no corresponding Orin
         # source and must never be replaced with empty remote fields.
         for key in ("hands", "wristForces"):
@@ -134,6 +140,8 @@ class UnifiedDiagnosticsService:
         return str(value or "warning").lower()
 
     async def alarms(self) -> list[dict[str, Any]]:
+        if self.telemetry.mode == "ros" and isinstance(self.engine, MockDiagnosisEngine):
+            await self._run_builtin_diagnosis()
         response = await self._engine_action("list_alarms", severity=0)
         raw_alarms = response.get("alarms", [])
         alarms = []
@@ -157,6 +165,13 @@ class UnifiedDiagnosticsService:
         combined = orin_alarms + local_alarms
         unique: dict[str, dict[str, Any]] = {}
         for alarm in combined:
+            # 上游 over_cpu 依据单核最大值；背屏以当前平均占用及自己的阈值生成统一 CPU 警告。
+            raw_title = " ".join(str(alarm.get(key, "")) for key in ("id", "title", "code")).lower()
+            usage_warning = any(token in raw_title for token in ("overcpu", "cpuusage", "cpu 占用", "cpu过高", "cpu 过高", "/jtop/cpu"))
+            if usage_warning and alarm.get("severity") == "warning" and not str(alarm.get("id", "")).startswith("builtin-"):
+                resource = self._diagnosis_metrics.get("picoResource" if "pico" in raw_title else "systemResource") or {}
+                if self._as_number(resource.get("cpuUsage")) is not None:
+                    continue
             unique[str(alarm.get("id", uuid.uuid4()))] = alarm
         now = time.monotonic()
         current_ids = set(unique)
@@ -257,6 +272,7 @@ class UnifiedDiagnosticsService:
         """
         snapshot = await self._current_snapshot()
         metrics = snapshot.get("diagnosticMetrics") or {}
+        self._diagnosis_metrics = metrics
         sensors = snapshot.get("sensors") or {}
         alarms: list[dict[str, Any]] = []
 
@@ -264,7 +280,7 @@ class UnifiedDiagnosticsService:
             if not isinstance(resource, dict):
                 return
             limits = (
-                ("cpuUsage", 90.0, "CPU 占用过高", "%", "请检查高负载进程。"),
+                ("cpuUsage", self._cpu_warn_percent, "CPU 占用过高", "%", "请检查高负载进程。"),
                 ("memoryUsage", 90.0, "内存占用过高", "%", "请检查内存占用与长期运行进程。"),
                 ("diskUsage", 90.0, "磁盘占用过高", "%", "请清理日志或扩容存储空间。"),
                 ("gpuUsage", 95.0, "GPU 占用过高", "%", "请检查视觉、推理等 GPU 任务。"),

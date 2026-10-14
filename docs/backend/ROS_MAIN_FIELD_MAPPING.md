@@ -26,6 +26,8 @@ ROS 适配器优先读取 `ROBOT_NAME`，也可通过 `ROS_NAMESPACE` 显式覆�
 | 腕部六维力 | `/zj_humanoid/hand/wrist_force_sensor/left`、`right` | `geometry_msgs/msg/WrenchStamped`，可显示 Fx/Fy/Fz、Mx/My/Mz 或计算腕部合力。 |
 | 底盘位置与速度 | `/chassis/odom_info` | `nav_msgs/msg/Odometry`；后端读取 `pose.pose.position` 和 `twist.twist.linear`，静止时零值正常，超过 5 秒无消息显示 `--`。 |
 | 底盘电量、电压、电流 | `/chassis/agv_state` | `chassis_msgs/msg/AGVNewState` 的 `battery_percentage`（0~1，转换为 %）、`battery_voltage`（V）、`battery_current`（A）；不推算温度或充电状态。 |
+| 开机运行时长 | Pico 本机 `/proc/uptime` | 本次开机累计时长，重启背屏后端不归零；不等于电机使能时间或任务作业时长。 |
+| 预计续航 | 第一组 `/web/battery_info` | `charge`（Ah）除以最近 20 分钟平均放电电流（A），乘 60 得分钟；使用已有窗口样本，不伪造满 20 分钟历史。 |
 | 底盘状态、急停反馈、碰撞反馈 | `/chassis/agv_state` | `state`、`description`、`emergency`、`collision` 写入 `diagnosticMetrics.chassisState`；碰撞反馈映射为碰撞条状态。该字段不能证明独立碰撞条硬件在线。 |
 | 系统、关节、电池总体诊断 | `/diagnostics_agg` | `diagnostic_msgs/DiagnosticArray`；由官方 `diagnostic_aggregator` 汇总，作为健康状态和告警来源。 |
 | 系统资源 | `/zj_humanoid/robot/orin_states/resource` 或 `/zj_humanoid/robot/pico_states/resource` | CPU、内存、磁盘、温度、GPU 使用率。 |
@@ -54,7 +56,7 @@ ROS 适配器优先读取 `ROBOT_NAME`，也可通过 `ROS_NAMESPACE` 显式覆�
 | 末端负载 | 存在 `/zj_humanoid/upperlimb/payload/get` 服务，需确认返回类型和“当前实际负载”语义。 |
 | 夹持力 | 腕部六维力不等同于夹持力，需确认手部夹持力接口。 |
 | 单体电压、充电循环次数 | 当前 `BatteryState` / 已见电源状态接口未定义这两项。 |
-| 剩余续航 | 需要产品确认估算算法（通常为剩余电量除以近一段时间平均耗电）。 |
+| 满负载保证续航 | 当前页面仅估算近期负载下的续航，不能作为额定满负载续航指标。 |
 | 本次作业时长、搬运次数、负载汇总 | `WorkStatus` 提供任务和进度；完整统计字段需确认任务系统接口。 |
 | 独立碰撞条硬件在线状态 | 底盘 `AGVNewState.collision` 提供整机碰撞反馈，未提供独立碰撞条设备在线位。 |
 

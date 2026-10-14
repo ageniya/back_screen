@@ -12,6 +12,8 @@ import threading
 import time
 from typing import Any
 
+from .runtime_metrics import BatteryRuntimeEstimator
+
 
 class MockTelemetryProvider:
     """Offline data only; it never controls or reads a real robot."""
@@ -198,6 +200,11 @@ class RosTelemetryProvider:
         self._UplimbState = UplimbState
         self._WrenchStamped = WrenchStamped
         self._lock = threading.Lock()
+        self._battery_estimator = BatteryRuntimeEstimator(
+            window_seconds=float(os.getenv("BATTERY_AVERAGE_WINDOW_SECONDS", "1200")),
+            discharge_sign=int(os.getenv("BATTERY_DISCHARGE_SIGN", "1")),
+            stale_seconds=float(os.getenv("ROS_DATA_STALE_SECONDS", "5")),
+        )
         self._last_seen: dict[str, float] = {}
         # This answers the web UI's key question: has the process recently
         # received a ROS message, not merely started without an error?
@@ -544,6 +551,11 @@ class RosTelemetryProvider:
                     return
             if valid_pack:
                 self._mark_data_received_locked("battery")
+                capacity = self._number(getattr(message, "capacity", None))
+                charge = self._number(getattr(message, "charge", None))
+                if charge is None or charge < 0 or (capacity is not None and capacity > 0 and charge > capacity):
+                    charge = percent * capacity if percent is not None and 0 <= percent <= 1 and capacity is not None and capacity > 0 else None
+                self._battery_estimator.observe(charge, current, int(message.power_supply_status))
             self._snapshot["battery"].update({
                 "percent": round(percent * 100, 1) if percent is not None else None,
                 "voltage": voltage,
@@ -865,6 +877,15 @@ class RosTelemetryProvider:
         now = time.monotonic()
         with self._lock:
             snapshot = copy.deepcopy(self._snapshot)
+            try:
+                with open("/proc/uptime", encoding="ascii") as uptime_file:
+                    seconds = int(float(uptime_file.read().split()[0]))
+                snapshot["uptime"] = f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
+            except (OSError, ValueError, IndexError):
+                snapshot["uptime"] = None
+            minutes, estimate = self._battery_estimator.estimate()
+            snapshot["battery"]["remainingMinutes"] = minutes
+            snapshot["battery"]["runtimeEstimate"] = estimate
             for name in snapshot["sensors"]:
                 seen_at = self._last_seen.get(name)
                 snapshot["sensors"][name] = None if seen_at is None else now - seen_at <= self._sensor_timeout
