@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Pico 缺少 chassis_msgs 时，将与 Orin 同版的消息接口构建到背屏私有目录。
 set -eo pipefail
+source /etc/nav01/Middleware.env
 source /opt/ros/humble/setup.bash
 if python3 -c 'from chassis_msgs.msg import AGVNewState' 2>/dev/null; then
   echo '当前 ROS 环境已包含 AGVNewState，无需构建。'

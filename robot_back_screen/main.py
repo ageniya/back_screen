@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -92,8 +92,7 @@ async def monitor() -> str:
 async def healthz() -> Dict[str, Any]:
     diagnosis_mode = (
         "诊断引擎适配器" if os.getenv("DIAGNOSIS_WS_URL")
-        else "内置实时诊断" if os.getenv("TELEMETRY_MODE", "mock").strip().lower() == "ros"
-        else "模拟诊断引擎"
+        else "内置实时诊断"
     )
     return {
         "status": "ok",
@@ -129,7 +128,23 @@ async def diagnose() -> Dict[str, Any]:
 
 @app.post("/api/v1/commands/soft-stop", summary="请求软件停止", tags=["诊断与控制"])
 async def soft_stop() -> Dict[str, Any]:
-    return await service().soft_stop()
+    return await _control_request(service().soft_stop())
+
+
+@app.post("/api/v1/commands/chassis-reset", summary="请求底盘复位", tags=["诊断与控制"])
+async def chassis_reset() -> Dict[str, Any]:
+    return await _control_request(service().reset_chassis())
+
+
+async def _control_request(action: Any) -> Dict[str, Any]:
+    try:
+        return await action
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/alarms/{alarm_id}/acknowledge", summary="确认单条已恢复告警", tags=["告警处理"])

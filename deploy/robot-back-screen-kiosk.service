@@ -1,0 +1,17 @@
+[Unit]
+Description=Robot back-screen Pico display
+After=graphical.target robot-back-screen-api.service
+Wants=robot-back-screen-api.service
+
+[Service]
+Type=simple
+User=nav01
+Environment=DISPLAY=:1
+Environment=XAUTHORITY=/run/user/1000/gdm/Xauthority
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+ExecStart=/bin/bash /opt/robot-back-screen/deploy/start-pico-screen.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

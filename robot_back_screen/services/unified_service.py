@@ -7,18 +7,18 @@ import os
 import time
 from typing import Any
 
-from robot_back_screen.clients.diagnosis_engine import MockDiagnosisEngine, WebSocketDiagnosisEngine, now_text
+from robot_back_screen.clients.diagnosis_engine import WebSocketDiagnosisEngine, now_text
 from robot_back_screen.clients.remote_robot import RemoteRobotClient
-from robot_back_screen.services.telemetry import MockTelemetryProvider, RosTelemetryProvider, create_telemetry_provider
+from robot_back_screen.services.telemetry import RosTelemetryProvider, create_telemetry_provider
 
 SEVERITY_NAMES = {1: "info", 2: "warning", 3: "critical", 4: "emergency"}
 SEVERITY_RANK = {"normal": 0, "info": 1, "warning": 2, "critical": 3, "emergency": 4}
 
 
 class UnifiedDiagnosticsService:
-    def __init__(self, engine: MockDiagnosisEngine | WebSocketDiagnosisEngine) -> None:
+    def __init__(self, engine: WebSocketDiagnosisEngine | None) -> None:
         self.engine = engine
-        self.telemetry: MockTelemetryProvider | RosTelemetryProvider = create_telemetry_provider()
+        self.telemetry: RosTelemetryProvider = create_telemetry_provider()
         # Pico 可选读取 Orin 的 HTTP 数据。未配置时仍是原来的单机模式。
         self.orin = RemoteRobotClient()
         self.history: list[dict[str, Any]] = []
@@ -55,6 +55,12 @@ class UnifiedDiagnosticsService:
         if not orin:
             return local
         merged = dict(orin)
+        # 控制请求由本机后端执行，按钮只能依赖本机实际收到的主控状态。
+        merged["controlState"] = local.get("controlState")
+        merged["chassisReset"] = local.get("chassisReset")
+        if not any((orin.get("battery2") or {}).get(field) is not None
+                   for field in ("percent", "voltage", "current")):
+            merged["battery2"] = local.get("battery2") or orin.get("battery2") or {}
         if local.get("uptime") is not None:
             merged["uptime"] = local["uptime"]
         # Keep proven Pico-only measurements. They have no corresponding Orin
@@ -100,8 +106,9 @@ class UnifiedDiagnosticsService:
             merged["diagnosticMetrics"] = merged_metrics
         # 整机主网络地址来自 Orin；同时保留 Pico 的本机地址，供背屏顶部
         # 明确展示两台计算单元，而不是让用户误以为只有一台设备在线。
-        merged_network = dict(orin.get("network") or {})
-        pico_ip = (local.get("network") or {}).get("ip")
+        merged_network = {**(orin.get("network") or {}), **(local.get("network") or {})}
+        merged_network["orinIp"] = (orin.get("network") or {}).get("orinIp") or (orin.get("network") or {}).get("ip")
+        pico_ip = (local.get("network") or {}).get("picoIp") or (local.get("network") or {}).get("ip")
         if pico_ip:
             merged_network["picoIp"] = pico_ip
         merged["network"] = merged_network
@@ -113,25 +120,12 @@ class UnifiedDiagnosticsService:
         if isinstance(self.engine, WebSocketDiagnosisEngine):
             return await self.engine.request(action, **payload)
         if action == "list_alarms":
-            return {"success": True, "alarms": self.engine.list_alarms()}
-        if action == "list_events":
-            return {"success": True, "events": self.engine.list_events()}
-        if action == "describe_data_view_fields":
-            return {"success": True, "fields": self.engine.fields()}
+            return {"success": True, "alarms": []}
+        if action in {"list_events", "describe_data_view_fields"}:
+            return {"success": True, "events": [], "fields": []}
         if action == "get_diagnosis_state":
-            return {"success": True, "state": self.engine.state()}
-        if action == "register":
-            return self.engine.register(payload["event"])
-        if action == "update":
-            event = payload["event"]
-            return self.engine.update(event["id"], event)
-        if action == "unregister":
-            return self.engine.unregister(payload["event"]["id"])
-        if action == "diagnose_once":
-            return self.engine.diagnose_all()
-        if action == "alarm_recover":
-            return self.engine.recover(payload["major_code"], payload["minor_code"])
-        raise ValueError(f"Unsupported diagnosis action: {action}")
+            return {"success": True, "state": None}
+        return {"success": False, "message": "独立诊断引擎未接入"}
 
     @staticmethod
     def _severity(value: Any) -> str:
@@ -140,7 +134,7 @@ class UnifiedDiagnosticsService:
         return str(value or "warning").lower()
 
     async def alarms(self) -> list[dict[str, Any]]:
-        if self.telemetry.mode == "ros" and isinstance(self.engine, MockDiagnosisEngine):
+        if self.engine is None:
             await self._run_builtin_diagnosis()
         response = await self._engine_action("list_alarms", severity=0)
         raw_alarms = response.get("alarms", [])
@@ -233,6 +227,16 @@ class UnifiedDiagnosticsService:
         if telemetry_status.get("telemetryMode") == "ros" and not has_diagnostics and not alarms:
             level = "info"
             label = "数据接入中" if active_sources else "等待 ROS 数据"
+        if (snapshot.get("diagnosticMetrics", {}).get("chassisState") or {}).get("emergency") is True:
+            level, label = "emergency", "底盘急停已触发"
+        elif snapshot.get("controlState") == "E_STOP_ACTIVE":
+            level, label = "warning", "复位流程锁定"
+        elif (snapshot.get("diagnosticMetrics", {}).get("chassisState") or {}).get("code") == 4:
+            chassis = snapshot["diagnosticMetrics"]["chassisState"]
+            waiting = "等待复位" in chassis.get("description", "")
+            if SEVERITY_RANK.get(level, 0) < SEVERITY_RANK["warning" if waiting else "critical"]:
+                level = "warning" if waiting else "critical"
+            label = "底盘等待复位" if waiting else "底盘故障"
         snapshot["health"] = {"level": level, "label": label, "alertCount": len(alarms)}
         # 供背屏资源栏显示；此处只含已经持续 5 秒的告警。
         snapshot["resourceAlerts"] = self._visible_resource_alerts
@@ -342,9 +346,8 @@ class UnifiedDiagnosticsService:
         }
 
     async def diagnose(self) -> dict[str, Any]:
-        # 独立诊断引擎尚未接入时，不使用 MockDiagnosisEngine 生成虚假
-        # 告警，而是直接检查此刻已经读取到的 ROS 遥测数据。
-        if self.telemetry.mode == "ros" and isinstance(self.engine, MockDiagnosisEngine):
+        # 独立诊断引擎尚未接入时，直接检查已读取的 ROS 遥测数据。
+        if self.engine is None:
             alarms = await self._run_builtin_diagnosis()
             # `diagnostic_alarms()` and Orin also contain direct diagnostic
             # flags (for example resource over-CPU).  Return the complete
@@ -364,8 +367,8 @@ class UnifiedDiagnosticsService:
         return {"accepted": bool(response.get("success", True)), "commandId": str(uuid.uuid4()), "engine": response}
 
     async def recover_alarm(self, alarm_id: str) -> dict[str, Any]:
-        if self.telemetry.mode == "ros" and isinstance(self.engine, MockDiagnosisEngine) and alarm_id.startswith("builtin-"):
-            remaining = await self._run_builtin_diagnosis()
+        if self.engine is None:
+            remaining = await self.alarms()
             still_active = any(item["id"] == alarm_id for item in remaining)
             message = "问题仍存在，请先在实机处理后再确认" if still_active else "已重新检查，该问题已恢复"
             self._record("builtin_alarm_recheck", message)
@@ -377,16 +380,9 @@ class UnifiedDiagnosticsService:
         return {"accepted": bool(response.get("success", True)), "commandId": str(uuid.uuid4()), "engine": response}
 
     async def clear_recovered(self) -> dict[str, Any]:
-        # The mock engine has no separate "recovered" state.  Clear its
-        # injected alarms so that the demonstration can return to healthy.
-        # With a real engine, alarm lifecycle stays under that engine's
-        # control; this endpoint is only a request to clear recovered alarms.
-        if isinstance(self.engine, MockDiagnosisEngine) and self.telemetry.mode != "ros":
-            cleared_count = self.engine.clear_alarms()
-            message = f"已清除 {cleared_count} 条模拟告警"
-        elif isinstance(self.engine, MockDiagnosisEngine):
-            before = len(self._builtin_alarms)
-            remaining = await self._run_builtin_diagnosis()
+        if self.engine is None:
+            before = len(self._visible_alarm_ids)
+            remaining = await self.alarms()
             cleared_count = max(0, before - len(remaining))
             message = f"已重新检查，清除 {cleared_count} 条已恢复问题；仍有 {len(remaining)} 条问题"
         else:
@@ -402,8 +398,15 @@ class UnifiedDiagnosticsService:
 
     async def soft_stop(self) -> dict[str, Any]:
         await self.telemetry.soft_stop()
-        self._record("soft_stop", "演示适配器已收到软件停止请求")
-        return {"accepted": True, "commandId": str(uuid.uuid4()), "mock": isinstance(self.engine, MockDiagnosisEngine)}
+        message = "底盘软急停服务已接受请求；请观察实际状态确认停止"
+        self._record("soft_stop", message)
+        return {"accepted": True, "commandId": str(uuid.uuid4()), "message": message}
+
+    async def reset_chassis(self) -> dict[str, Any]:
+        result = await self.telemetry.reset_chassis()
+        if result.get("sent"):
+            self._record("chassis_reset", result.get("message", "主控复位请求已发送"))
+        return {"accepted": bool(result.get("sent")), "commandId": str(uuid.uuid4()), **result}
 
     async def list_rules(self) -> list[dict[str, Any]]:
         return (await self._engine_action("list_events")).get("events", [])

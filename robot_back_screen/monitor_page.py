@@ -24,7 +24,7 @@ MONITOR_HTML = r"""<!doctype html>
 (function(){
   var frame=0, fetching=false;
   function escapeHtml(value){return String(value===undefined||value===null||value===''?'--':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function num(value,unit){var n=Number(value);return Number.isFinite(n)?n.toFixed(2)+(unit||''):'--';}
+  function num(value,unit){if(value===undefined||value===null||value==='')return '--';var n=Number(value);return Number.isFinite(n)?n.toFixed(2)+(unit||''):'--';}
   function card(label,value,kind){return '<div class="card"><div class="label">'+escapeHtml(label)+'</div><div class="value '+(kind||'')+'" title="'+escapeHtml(value)+'">'+escapeHtml(value)+'</div></div>';}
   function section(title,body){return '<section class="section"><h2>'+escapeHtml(title)+'</h2>'+body+'</section>';}
   function grid(items){return '<div class="grid">'+items.join('')+'</div>';}
@@ -35,11 +35,19 @@ MONITOR_HTML = r"""<!doctype html>
     var motion=snapshot.motion||{}, battery=snapshot.battery||{}, sensors=snapshot.sensors||{}, network=snapshot.network||{}, metrics=(snapshot.diagnosticMetrics||{}).systemResource||{}, errors=(snapshot.diagnosticMetrics||{}).systemResourceErrors||{};
     var alarmCount=(alarms.data||[]).length;
     var html=section('Orin 连接与诊断',grid([
-      card('数据模式',text(health.telemetryMode)),card('数据状态',health.dataReady?'正在接收':'等待数据',health.dataReady?'ok':'warn'),card('最新消息年龄',num(health.lastMessageAgeSeconds,' s')),card('当前告警',alarmCount,alarmCount?'bad':'ok'),card('Orin IP',text(network.ip)),card('网络状态',text(((snapshot.diagnosticMetrics||{}).network||{}).linkState)),card('诊断结论',text((snapshot.health||{}).label))
+      card('数据模式',text(health.telemetryMode)),card('数据状态',health.dataReady?'正在接收':'等待数据',health.dataReady?'ok':'warn'),card('最新消息年龄',num(health.lastMessageAgeSeconds,' s')),card('当前告警',alarmCount,alarmCount?'bad':'ok'),card('Orin IP',text(network.orinIp||(network.deviceRole==='orin'?network.ip:null))),card('网络状态',text(((snapshot.diagnosticMetrics||{}).network||{}).linkState)),card('诊断结论',text((snapshot.health||{}).label))
     ])+sourceDetails(health.activeSources,'orin'));
     html+=section('Orin 资源（CPU 为各核心平均值）',grid([
       card('CPU 平均占用',num(metrics.cpuUsage,'%'),Number(metrics.cpuUsage)>=80?'bad':''),card('内存占用',num(metrics.memoryUsage,'%')),card('磁盘占用',num(metrics.diskUsage,'%')),card('GPU 占用',num(metrics.gpuUsage,'%')),card('最高温度',num(metrics.temperature,' °C'),Number(metrics.temperature)>=80?'bad':''),card('CPU 告警',errors.overCpu?'存在告警':'正常',errors.overCpu?'bad':'ok'),card('内存告警',errors.overMemory?'存在告警':'正常',errors.overMemory?'bad':'ok'),card('温度告警',errors.overTemperature?'存在告警':'正常',errors.overTemperature?'bad':'ok')
     ]));
+    [battery,snapshot.battery2||{}].forEach(function(pack,index){
+      html+=section('电池'+(index+1),grid([
+        card('电量',num(pack.percent,'%')),card('电压',num(pack.voltage,' V')),
+        card('电流',num(pack.current,' A')),card('温度',num(pack.temperature,' °C')),
+        card('单体平均电压',num(pack.cellVoltage,' V')),card('状态',text(pack.chargeStatus)),
+        card('该电池预计续航',num(pack.remainingMinutes,' min'))
+      ]));
+    });
     document.getElementById('orinContent').innerHTML=html;
   }
   function renderPico(health,snapshot){

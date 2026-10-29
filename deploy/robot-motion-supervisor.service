@@ -1,0 +1,21 @@
+[Unit]
+Description=Robot back-screen motion gate and chassis reset supervisor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=naviai
+WorkingDirectory=/opt/robot-back-screen-control
+EnvironmentFile=/etc/robot-back-screen-motion/env
+ExecStart=/bin/bash /opt/robot-back-screen-control/deploy/start-motion-supervisor.sh
+ExecStopPost=/bin/bash /opt/robot-back-screen-control/deploy/start-motion-supervisor.sh stop
+WatchdogSec=3
+Restart=on-failure
+RestartSec=1
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

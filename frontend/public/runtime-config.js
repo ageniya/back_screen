@@ -1,5 +1,5 @@
 // Deployment-time configuration. When served by the unified backend, use that
-// same origin automatically. Vite development remains demo mode unless ?api=
+// same origin automatically. Vite development requires an API address, supplied as ?api=
 // is supplied, for example ?api=http://127.0.0.1:8000/api/v1.
 var robotApiFromQuery = new URLSearchParams(window.location.search).get('api') || '';
 var robotApiFromUnifiedService = !['5173', '5174'].includes(window.location.port)

@@ -28,11 +28,12 @@ ROS 适配器优先读取 `ROBOT_NAME`，也可通过 `ROS_NAMESPACE` 显式覆�
 | 底盘电量、电压、电流 | `/chassis/agv_state` | `chassis_msgs/msg/AGVNewState` 的 `battery_percentage`（0~1，转换为 %）、`battery_voltage`（V）、`battery_current`（A）；不推算温度或充电状态。 |
 | 开机运行时长 | Pico 本机 `/proc/uptime` | 本次开机累计时长，重启背屏后端不归零；不等于电机使能时间或任务作业时长。 |
 | 预计续航 | 第一组 `/web/battery_info` | `charge`（Ah）除以最近 20 分钟平均放电电流（A），乘 60 得分钟；使用已有窗口样本，不伪造满 20 分钟历史。 |
-| 底盘状态、急停反馈、碰撞反馈 | `/chassis/agv_state` | `state`、`description`、`emergency`、`collision` 写入 `diagnosticMetrics.chassisState`；碰撞反馈映射为碰撞条状态。该字段不能证明独立碰撞条硬件在线。 |
+| 底盘状态、急停反馈、碰撞反馈 | `/chassis/agv_state` 或 `/zj_humanoid/chassis/agv_state` | `state`、`description`、`emergency`、`collision` 写入 `diagnosticMetrics.chassisState`；碰撞反馈映射为碰撞条状态。该字段不能证明独立碰撞条硬件在线。 |
 | 系统、关节、电池总体诊断 | `/diagnostics_agg` | `diagnostic_msgs/DiagnosticArray`；由官方 `diagnostic_aggregator` 汇总，作为健康状态和告警来源。 |
 | 系统资源 | `/zj_humanoid/robot/orin_states/resource` 或 `/zj_humanoid/robot/pico_states/resource` | CPU、内存、磁盘、温度、GPU 使用率。 |
 | 系统资源阈值异常 | `/zj_humanoid/robot/orin_states/errors` 或 `/zj_humanoid/robot/pico_states/errors` | 过温、CPU、内存、磁盘告警标记。 |
-| 急停 | Pico：`/robot/stop`；WA：`/chassis/soft_estop` 服务 | 均为 `std_srvs/Trigger`；通过 `ROS_STOP_SERVICE` 选择，必须有权限控制和二次确认。 |
+| 底盘软急停 | `/zj_humanoid/chassis/soft_estop` 服务 | `std_srvs/srv/Trigger`；可用 `ROS_STOP_SERVICE` 覆盖，默认关闭实机控制。具体名称和实际行为需要现场验证。 |
+| 底盘复位 | `/zj_humanoid/chassis/agv_reset` 服务 | `std_srvs/srv/Trigger`；底盘中间件负责发送 `resetCommand`。背屏复位状态机通过此服务请求底盘复位；实际调用前必须完成主控运动联锁，见 [接入说明](CHASSIS_RESET.md)。 |
 | 恢复 | `/zj_humanoid/robot/recover` 服务 | 真实接入后调用 `std_srvs/Trigger`；只用于满足恢复条件后的动作。 |
 
 ## 通过“消息是否持续到达”判断在线状态
@@ -82,7 +83,7 @@ source /home/nav01/back-screen-preview/ros_interfaces/install/setup.bash
 `chassis_msgs` 包时直接使用它，不加载接口子集。实际 Pico 的 `start-screen.sh`
 已在缺少该类型时加载这个私有目录，开机启动沿用同一配置。
 
-使用仓库 `deploy/robot-back-screen.service` 部署时，也可在其 EnvironmentFile 中设置
+使用仓库 `deploy/robot-back-screen-api.service` 部署时，也可在其 EnvironmentFile 中设置
 `ROS_INTERFACES_SETUP=/home/nav01/back-screen-preview/ros_interfaces/install/setup.bash`。
 标准 `BatteryState` 若也开始发布有效数据，可补充电池温度、单体电压和充电状态；
 这些扩展字段独立判断消息新鲜度，不能因底盘三项电池数据仍在更新而保留过期值。
@@ -91,7 +92,7 @@ source /home/nav01/back-screen-preview/ros_interfaces/install/setup.bash
 
 1. 在真实机器人上运行 `echo $ROBOT_NAME`，确认接口前缀；再运行 `ros2 topic list`，确认上述名称是否存在。
 2. 使用 `ros2 topic echo <话题名> --once` 核对实际消息字段和值域。
-3. 在统一后端添加 ROS 2 订阅适配器；保留当前 `mock` 模式，便于无实机开发和演示。
+3. 在统一后端添加 ROS 2 订阅适配器；使用真实 ROS 数据，未收到数据时显示未知。
 4. 后端将 ROS 原始消息转换为 `/api/v1/robot/snapshot`、`/api/v1/alarms` 的稳定格式。
 5. 背屏无需改动，只将数据源切换为后端实机模式。
 

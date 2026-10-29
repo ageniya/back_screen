@@ -12,11 +12,20 @@
 | 当前告警 | `GET /alarms` |
 | 本次作业总结 | `GET /work-summary` |
 | 一键诊断 | `POST /commands/diagnose` |
-| 急停（软件停止） | `POST /commands/soft-stop` |
+| 底盘软件急停 | `POST /commands/soft-stop` |
+| 底盘复位 | `POST /commands/chassis-reset` |
 | 确认恢复告警 | `POST /alarms/:id/acknowledge` |
 | 清除已恢复告警 | `POST /alarms/clear-recovered` |
 
 所有成功命令至少返回：`{ "accepted": true, "commandId": "..." }`。`accepted` 仅表示请求已受理；实际安全动作和最终状态必须由下一次快照/告警结果确认。
+
+底盘软件急停使用 `ROS_STOP_SERVICE` 指定的 `std_srvs/srv/Trigger` 服务，默认 `/zj_humanoid/chassis/soft_estop`。当前页面不提供软件急停按钮。
+
+复位状态由后端从 AGVNewState 反馈派生，无需外部 `controlState` 话题。快照的 `controlState` 为四种状态之一，未收到反馈时为空。`chassisReset` 包含 `resetAllowed`、`blockReason`、`error`、`feedbackFresh`、`motionInterlockReady`，前端根据这些字段开放或禁用按钮，并保留二次确认。
+
+复位由本项目的 `robot-motion-supervisor` 执行。HTTP 后端调用我们自己的 `/{ROBOT_NAME}/back_screen/reset`（Trigger），主控完成运动门控、导航目标取消及任务中断记录后，才调用底盘 `agv_reset`。界面受理不代表底盘已复位，最终结果看后续快照。
+
+`ROS_ENABLE_RESET` 独立控制人工复位权限；`ROS_ENABLE_CONTROL` 仍用于原有软件停止接口。完整流程、三路底盘运动出口、复位后新任务确认及现场验收方法见 [急停复位实现](backend/CHASSIS_RESET.md)。
 
 ## 2. 实时快照
 

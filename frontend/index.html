@@ -13,17 +13,17 @@
   <!-- ========== TOP BAR ========== -->
   <div class="top-bar">
     <div class="left">
-      <span class="robot-name">&#x1F916; 机器人型号：<span id="robotModel">R1</span></span>
+      <span class="robot-name">&#x1F916; 机器人型号：<span id="robotModel">--</span></span>
     </div>
     <div class="center">
       <span class="status-dot" id="topStatusDot"></span>
-      <span id="topStatusText">系统健康</span>
+      <span id="topStatusText">等待 ROS 数据</span>
     </div>
     <div class="right">
-      <span>&#x1F50B; <span id="batteryTop">85%</span></span>
+      <span>&#x1F50B; 电池1 <span id="batteryTop">--</span> · 电池2 <span id="battery2Top">--</span></span>
       <span id="clockDisplay">14:23</span>
-      <span id="networkIp">IP 192.168.1.10</span>
-      <span class="data-source demo" id="dataSource">演示数据</span>
+      <span id="networkIp">--</span>
+      <span class="data-source connecting" id="dataSource">接口连接中</span>
       <span class="data-freshness" id="dataFreshness">数据状态 --</span>
     </div>
   </div>
@@ -38,38 +38,38 @@
       <div class="card health-row">
         <div class="health-left">
           <div class="big-dot" id="bigStatusDot"></div>
-          <span class="health-text" id="healthText">系统健康</span>
+          <span class="health-text" id="healthText">等待 ROS 数据</span>
         </div>
         <div class="health-right">
-          运行时长 <span id="uptime">2h23m</span>
+          运行时长 <span id="uptime">--</span>
           &nbsp;|&nbsp;
-          预计续航 <span id="remainingTime" title="按近期平均放电电流估算，实际续航随负载变化">42m</span>
+          分电池续航 <span id="remainingTime" title="两块分别按近期平均放电电流估算，不代表整机续航">--</span>
           &nbsp;|&nbsp;
-          告警数 <span id="alertCount" style="color:#FF4D4F;">4</span>
+          告警数 <span id="alertCount" style="color:#FF4D4F;">0</span>
         </div>
       </div>
 
       <!-- Row 2: Core Motion Data -->
       <div class="card motion-row">
         <div>
-          <span class="label">当前位置</span>
-          <span class="value" id="currentPosition">X1.23 Y2.34 Z0.56</span>
+          <span class="label" title="来自底盘里程计 odom 坐标系；原点由里程计初始化确定，不一定等于开机位置或地图全局坐标。">当前位置（odom）</span>
+          <span class="value" id="currentPosition">--</span>
         </div>
         <div>
           <span class="label">速度</span>
-          <span class="value" id="currentSpeed">0.45 m/s</span>
+          <span class="value" id="currentSpeed">--</span>
         </div>
         <div>
           <span class="label">目标点</span>
-          <span class="value" id="targetPosition">X5.00 Y3.00 Z1.20</span>
+          <span class="value" id="targetPosition">--</span>
         </div>
         <div>
           <span class="label">左手 TCP</span>
-          <span class="value" id="leftTcpPosition">X1.23 Y2.62 Z0.56</span>
+          <span class="value" id="leftTcpPosition">--</span>
         </div>
         <div>
           <span class="label">右手 TCP</span>
-          <span class="value" id="rightTcpPosition">X1.23 Y2.06 Z0.56</span>
+          <span class="value" id="rightTcpPosition">--</span>
         </div>
       </div>
 
@@ -87,28 +87,35 @@
         <span class="joint-divider"></span>
         <span class="joint-item"><span class="joint-label" id="jointLabel6">关节 6</span> <span id="joint6">--</span></span>
         <div class="joint-meta">
-          <span>负载 <span class="meta-value" id="payload">2.3kg</span></span>
+          <span>负载 <span class="meta-value" id="payload">--</span></span>
           <span class="joint-divider"></span>
           <span title="由左腕六维力合成">左腕合力 <span class="meta-value" id="leftGripForce">--</span></span>
           <span title="由右腕六维力合成">右腕合力 <span class="meta-value" id="rightGripForce">--</span></span>
           <span class="joint-divider"></span>
-          <span>模式 <span class="meta-value" id="operationMode" style="color:#52C41A;">自动</span></span>
+          <span>模式 <span class="meta-value" id="operationMode" style="color:#52C41A;">--</span></span>
         </div>
       </div>
 
       <!-- Row 4: Battery Details -->
-      <div class="card battery-row" id="batteryRow">
-        <span><span class="batt-label" id="batteryLabel1">电量</span> <span class="batt-value" id="batteryLevel">85%</span></span>
-        <span class="batt-divider">|</span>
-        <span><span class="batt-label" id="batteryLabel2">电压</span> <span class="batt-value" id="batteryVoltage">14.8V</span></span>
-        <span><span class="batt-label" id="batteryLabel3">电流</span> <span class="batt-value" id="batteryCurrent">3.2A</span></span>
-        <span class="batt-divider">|</span>
-        <span><span class="batt-label" id="batteryLabel4">温度</span> <span class="batt-value" id="batteryTemperature">28°C</span></span>
-        <span class="batt-divider">|</span>
-        <span><span class="batt-label" id="batteryLabel5">单体</span> <span class="batt-value" id="cellVoltage">3.70V</span></span>
-        <span><span class="batt-label" id="batteryLabel6">状态</span> <span class="batt-value" id="chargeStatus" style="color:#FADB14;">充电中</span></span>
-        <span class="batt-divider">|</span>
-        <span><span class="batt-label" id="batteryLabel7">循环</span> <span class="batt-value" id="chargeCycles">12</span></span>
+      <div class="card battery-row dual-battery-row" id="batteryRow">
+        <div class="battery-pack">
+        <strong>电池1</strong>
+        <span><span class="batt-label" id="batteryLabel1">电量</span> <span class="batt-value" id="batteryLevel">--</span></span>
+        <span><span class="batt-label" id="batteryLabel2">电压</span> <span class="batt-value" id="batteryVoltage">--</span></span>
+        <span><span class="batt-label" id="batteryLabel3">电流</span> <span class="batt-value" id="batteryCurrent">--</span></span>
+        <span><span class="batt-label" id="batteryLabel4">温度</span> <span class="batt-value" id="batteryTemperature">--</span></span>
+        <span><span class="batt-label" id="batteryLabel5">单体</span> <span class="batt-value" id="cellVoltage">--</span></span>
+        <span><span class="batt-label" id="batteryLabel6">状态</span> <span class="batt-value" id="chargeStatus" style="color:#FADB14;">--</span></span>
+        </div>
+        <div class="battery-pack">
+          <strong>电池2</strong>
+          <span><span class="batt-label">电量</span> <span class="batt-value" id="battery2Level">--</span></span>
+          <span><span class="batt-label">电压</span> <span class="batt-value" id="battery2Voltage">--</span></span>
+          <span><span class="batt-label">电流</span> <span class="batt-value" id="battery2Current">--</span></span>
+          <span><span class="batt-label">温度</span> <span class="batt-value" id="battery2Temperature">--</span></span>
+          <span><span class="batt-label">单体</span> <span class="batt-value" id="battery2CellVoltage">--</span></span>
+          <span><span class="batt-label">状态</span> <span class="batt-value" id="battery2ChargeStatus">--</span></span>
+        </div>
       </div>
 
       <!-- Orin/Pico resource comparison; Pico remains -- until its resource topic publishes. -->
@@ -133,14 +140,14 @@
 
       <!-- Row 5: Sensor Status -->
       <div class="card sensor-row" id="sensorRow">
-        <span class="sensor-item"><span class="sensor-dot green"></span>雷达①</span>
+        <span class="sensor-item"><span class="sensor-dot unknown"></span>雷达①</span>
         <span class="sensor-item"><span class="sensor-dot unknown"></span>雷达②</span>
-        <span class="sensor-item"><span class="sensor-dot green"></span>头部相机</span>
-        <span class="sensor-item"><span class="sensor-dot green"></span>左腕相机</span>
-        <span class="sensor-item"><span class="sensor-dot green"></span>右腕相机</span>
-        <span class="sensor-item"><span class="sensor-dot green"></span>六维力</span>
-        <span class="sensor-item"><span class="sensor-dot green"></span>碰撞条</span>
-        <span class="sensor-item"><span class="sensor-dot green"></span>网络</span>
+        <span class="sensor-item"><span class="sensor-dot unknown"></span>头部相机</span>
+        <span class="sensor-item"><span class="sensor-dot unknown"></span>左腕相机</span>
+        <span class="sensor-item"><span class="sensor-dot unknown"></span>右腕相机</span>
+        <span class="sensor-item"><span class="sensor-dot unknown"></span>六维力</span>
+        <span class="sensor-item"><span class="sensor-dot unknown"></span>碰撞条</span>
+        <span class="sensor-item"><span class="sensor-dot unknown"></span>网络</span>
       </div>
 
       <!-- Row 6: Action Buttons -->
@@ -151,10 +158,16 @@
         <button class="btn btn-danger" id="btnFaultClear" onclick="clearFault()">
           &#x2713; 确认已恢复
         </button>
+        <button class="btn btn-reset" id="btnChassisReset" onclick="requestChassisReset()" disabled>
+          &#x21BB; 复位
+        </button>
       </div>
 
-      <div class="data-note" id="dataQualityNote">
-        数据说明：只展示已收到的真实数据；<b>--</b> 表示未接入或当前无消息，<b>0.0</b> 表示收到的真实数值为零。
+      <div class="control-status-banner" id="controlStatusBanner" role="status" aria-live="polite">等待有效底盘状态</div>
+      <div class="data-note-row">
+        <div class="data-note" id="dataQualityNote">
+          数据说明：只展示已收到的真实数据；<b>--</b> 表示未接入或当前无消息，<b>0.0</b> 表示收到的真实数值为零。
+        </div>
       </div>
 
       <!-- Row 7: Alert Banner -->
@@ -167,7 +180,7 @@
     <!-- Tab: 告警 (real data) -->
     <div class="tab-content alert-page" id="tab-alerts" style="display:none;">
       <div class="alert-header">
-        <span>实时告警 (<span id="alertHeaderCount">4</span>)</span>
+        <span>实时告警 (<span id="alertHeaderCount">0</span>)</span>
         <span class="time" id="alertPageTime">2026-08-06 14:23:18</span>
       </div>
       <div class="alert-body">
@@ -176,19 +189,19 @@
         <!-- Right: alert detail -->
         <div class="alert-detail" id="alertDetail">
           <div class="detail-header">
-            <span class="detail-code" id="detailCode">F001</span>
-            <span class="detail-title" id="detailTitle">左臂电机温度过高</span>
+            <span class="detail-code" id="detailCode">--</span>
+            <span class="detail-title" id="detailTitle">--</span>
           </div>
           <div class="detail-section">
             <div class="section-label">告警描述</div>
-            <div class="section-text" id="detailDesc">左臂电机温度超过安全阈值，当前温度78℃，阈值70℃。</div>
+            <div class="section-text" id="detailDesc">--</div>
           </div>
           <div class="detail-section detail-suggestion">
             <div class="section-label" style="color:#FADB14;">处理建议</div>
-            <div class="section-text" id="detailSuggestion">建议立即停机检查电机散热系统，清理散热片灰尘，检查风扇是否正常工作。</div>
+            <div class="section-text" id="detailSuggestion">--</div>
           </div>
           <div class="chart-box">
-            <div class="chart-label" id="chartLabel">实时曲线 · 电机温度 (°C)</div>
+            <div class="chart-label" id="chartLabel">--</div>
             <canvas class="chart-canvas" id="alertChart"></canvas>
           </div>
           <div class="detail-actions">
@@ -205,6 +218,7 @@
         <span>本次作业记录</span>
         <span class="summary-status" id="summaryStatus">等待作业数据</span>
       </div>
+      <div class="summary-status" id="summaryUpdated">来源：作业记录接口；页面打开时每 5 秒刷新。搬运明细需任务系统提供。</div>
       <!-- KPI Row: 电量 · 时长 · 电流 -->
       <div class="summary-kpi-row">
         <div class="kpi-card">
@@ -228,7 +242,7 @@
           <span><span class="load-value" id="loadTotal">--</span><span class="load-sub">kg</span></span>
         </div>
         <div class="load-card">
-          <span class="load-label">平均负载率 (额定50kg)</span>
+          <span class="load-label" id="loadRateLabel">平均负载率（额定负载未提供）</span>
           <span><span class="load-value" id="loadRate">--</span><span class="load-sub">%</span></span>
         </div>
       </div>
@@ -270,65 +284,6 @@
           </div>
           <div class="tool-actions"><button class="btn btn-primary" onclick="openRobot3DView()">打开 3D 视图 &#x2192;</button></div>
         </div>
-        <div class="tool-card" id="demoEntry">
-          <h3>演示控制</h3>
-          <p>用于修改页面演示数据、注入告警并验证界面联动效果。</p>
-          <div class="tool-actions"><button class="btn btn-primary" onclick="openDemoControl()">进入演示控制 &#x2192;</button></div>
-        </div>
-        <div class="tool-card" id="demoTools" style="display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><h3 style="margin:0;">演示控制</h3><button class="btn" style="flex:0 0 auto;min-height:32px;" onclick="closeDemoControl()">&#x2190; 返回工具</button></div>
-          <p>仅用于页面演示。修改后点击“应用状态参数”即可同步到状态页；告警通过下方按钮注入。接入实机后此区域不会显示。</p>
-          <div class="demo-section-title">运行与运动</div>
-          <div class="demo-form-grid">
-            <label class="demo-field">机器人型号<input id="demoRobotModel" value="R1"></label>
-            <label class="demo-field">当前位置<input id="demoCurrentPosition" value="X1.23 Y2.34 Z0.56"></label>
-            <label class="demo-field">目标点<input id="demoTargetPosition" value="X5.00 Y3.00 Z1.20"></label>
-            <label class="demo-field">速度<input id="demoCurrentSpeed" value="0.45 m/s"></label>
-            <label class="demo-field">左手 TCP<input id="demoLeftTcpPosition" value="X1.23 Y2.62 Z0.56"></label>
-            <label class="demo-field">右手 TCP<input id="demoRightTcpPosition" value="X1.23 Y2.06 Z0.56"></label>
-            <label class="demo-field">运行时长<input id="demoUptime" value="2h23m"></label>
-            <label class="demo-field">剩余续航（分钟）<input id="demoRemainingTime" type="number" value="42"></label>
-            <label class="demo-field">负载（kg）<input id="demoPayload" type="number" step="0.1" value="2.3"></label>
-            <label class="demo-field">腕部合力（N）<input id="demoGripForce" type="number" step="0.1" value="12.5"></label>
-            <label class="demo-field">运行模式<select id="demoOperationMode"><option selected>自动</option><option>手动</option></select></label>
-            <label class="demo-field">IP 地址<input id="demoNetworkIp" value="192.168.1.10"></label>
-          </div>
-          <div class="demo-section-title">关节角度（°）</div>
-          <div class="demo-form-grid">
-            <label class="demo-field">J1<input id="demoJoint1" type="number" value="15"></label>
-            <label class="demo-field">J2<input id="demoJoint2" type="number" value="23"></label>
-            <label class="demo-field">J3<input id="demoJoint3" type="number" value="-8"></label>
-            <label class="demo-field">J4<input id="demoJoint4" type="number" value="42"></label>
-            <label class="demo-field">J5<input id="demoJoint5" type="number" value="11"></label>
-            <label class="demo-field">J6<input id="demoJoint6" type="number" value="5"></label>
-          </div>
-          <div class="demo-section-title">电池</div>
-          <div class="demo-form-grid">
-            <label class="demo-field">电量（%）<input id="demoBatteryPercent" type="number" min="0" max="100" value="85"></label>
-            <label class="demo-field">电压（V）<input id="demoBatteryVoltage" type="number" step="0.1" value="14.8"></label>
-            <label class="demo-field">电流（A）<input id="demoBatteryCurrent" type="number" step="0.1" value="3.2"></label>
-            <label class="demo-field">温度（℃）<input id="demoBatteryTemperature" type="number" value="28"></label>
-            <label class="demo-field">单体电压（V）<input id="demoCellVoltage" type="number" step="0.01" value="3.70"></label>
-            <label class="demo-field">充电状态<select id="demoChargeStatus"><option selected>充电中</option><option>未充电</option><option>已充满</option></select></label>
-            <label class="demo-field">充电循环<input id="demoChargeCycles" type="number" min="0" value="12"></label>
-          </div>
-          <div class="demo-section-title">设备连接状态</div>
-          <div class="demo-form-grid">
-            <label class="sensor-toggle"><input data-demo-sensor="lidar" type="checkbox" checked> 激光雷达正常</label>
-            <label class="sensor-toggle"><input data-demo-sensor="depthCamera" type="checkbox" checked> 深度相机正常</label>
-            <label class="sensor-toggle"><input data-demo-sensor="forceSensor" type="checkbox" checked> 六维力正常</label>
-            <label class="demo-field">碰撞条状态<select id="demoBumperState"><option value="online" selected>在线，未碰撞</option><option value="triggered">已碰撞</option><option value="offline">不在线</option></select></label>
-            <label class="sensor-toggle"><input data-demo-sensor="camera" type="checkbox" checked> 摄像头正常</label>
-            <label class="sensor-toggle"><input data-demo-sensor="network" type="checkbox" checked> 网络正常</label>
-          </div>
-          <div class="tool-actions">
-            <button class="btn btn-primary" onclick="applyDemoStatus()">应用状态参数</button>
-            <button class="btn" onclick="resetDemoStatus()">重置状态参数</button>
-            <button class="btn btn-danger" onclick="addDemoAlert('critical')">注入严重故障</button>
-            <button class="btn btn-primary" onclick="addDemoAlert('warning')">注入警告</button>
-            <button class="btn" onclick="clearDemoAlerts()">清空演示告警</button>
-          </div>
-        </div>
         <div class="tool-empty" id="toolsPlaceholder">
           <div class="tool-icon">&#x2699;&#xFE0F;</div>
           <h3>扩展工具</h3>
@@ -336,7 +291,7 @@
         </div>
         <div class="robot-3d-view" id="robot3dView" style="display:none;">
           <div class="robot-3d-toolbar">
-            <div><strong>WA-T V1.1 · 3D 状态视图</strong><span id="robot3dStatus">正在加载机器人模型…</span></div>
+            <div><strong>WA-T 261028 · 3D 状态视图</strong><span id="robot3dStatus">正在加载机器人模型…</span></div>
             <div class="robot-3d-toolbar-actions">
               <button class="robot-3d-toggle active" id="robot3dGridToggle" onclick="toggleRobot3DOption('grid')">网格</button>
               <button class="robot-3d-toggle active" data-robot3d-data="motion" onclick="toggleRobot3DData('motion')">运动</button>

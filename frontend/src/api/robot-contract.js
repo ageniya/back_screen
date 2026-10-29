@@ -14,6 +14,7 @@ export function normalizeSnapshot(raw) {
     health: { level: 'normal', alertCount: 0, ...(data.health || {}) },
     motion: { ...(data.motion || {}) },
     battery: { ...(data.battery || {}) },
+    battery2: { ...(data.battery2 || {}) },
     sensors: { ...(data.sensors || {}) },
     network: { ...(data.network || {}) },
   };

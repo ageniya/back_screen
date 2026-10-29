@@ -1,6 +1,9 @@
 import unittest
 
-from robot_back_screen.services.runtime_metrics import BatteryRuntimeEstimator
+from robot_back_screen.services.runtime_metrics import (
+    BatteryRuntimeEstimator,
+    infer_battery_charge_status,
+)
 
 
 class RuntimeEstimatorTests(unittest.TestCase):
@@ -50,6 +53,17 @@ class RuntimeEstimatorTests(unittest.TestCase):
         self.sample(10, remaining=10, current=3)
         self.sample(15, remaining=10, current=3)
         self.assertEqual(self.estimator.estimate()[0], 240)
+
+    def test_infers_charge_state_from_readings_not_status_code(self):
+        # This robot's observed convention is negative current while charging.
+        self.assertEqual(infer_battery_charge_status(49.3, 24.5, -7.8), ("充电中", 1))
+        self.assertEqual(infer_battery_charge_status(49.3, 24.5, 7.8), ("放电中", 2))
+        self.assertEqual(infer_battery_charge_status(54.0, 100, 0.05), ("已充满", 4))
+        self.assertEqual(infer_battery_charge_status(49.3, 24.5, 0.05), ("未充电", 3))
+
+    def test_missing_or_invalid_measurements_have_no_inferred_state(self):
+        self.assertEqual(infer_battery_charge_status(None, 50, 1), (None, 0))
+        self.assertEqual(infer_battery_charge_status(0, 50, 1), (None, 0))
 
 
 if __name__ == '__main__':

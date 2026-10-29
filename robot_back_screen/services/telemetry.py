@@ -12,114 +12,8 @@ import threading
 import time
 from typing import Any
 
-from .runtime_metrics import BatteryRuntimeEstimator
-
-
-class MockTelemetryProvider:
-    """Offline data only; it never controls or reads a real robot."""
-
-    def __init__(self) -> None:
-        self.mode = "mock"
-        self._started_at = time.monotonic()
-        self._soft_stopped = False
-
-    async def snapshot(self) -> dict[str, Any]:
-        elapsed_seconds = time.monotonic() - self._started_at
-        uptime_seconds = int(elapsed_seconds)
-        # 模拟实机连续关节流：约 20 秒完成一次双臂张开、合上的往返。
-        # 数值为 URDF 关节使用的 ROS 弧度值，供背屏 3D 视图联调。
-        arm_open_ratio = (math.sin(elapsed_seconds * 2 * math.pi / 20 - math.pi / 2) + 1) / 2
-        shoulder_angle = 0.10 + 1.25 * arm_open_ratio
-        elbow_angle = 0.08 + 0.32 * arm_open_ratio
-        shoulder_deg = round(math.degrees(shoulder_angle), 1)
-        elbow_deg = round(math.degrees(elbow_angle), 1)
-        # 双臂 TCP 随张开动作产生小幅变化，便于联调状态页与 3D 视图。
-        tcp_x = 1.23 + 0.28 * arm_open_ratio
-        tcp_z = 0.56 + 0.12 * arm_open_ratio
-        return {
-            "robotModel": "R1-DEMO",
-            "motion": {
-                "position": "X1.23 Y2.34 Z0.56",
-                "target": "X5.00 Y3.00 Z1.20",
-                # 底盘保持原地，双臂在做模拟动作，因此底盘速度为零。
-                "speed": "0.00 m/s",
-                # tcp 保留给旧版调用方；新页面应使用左右手各自的 TCP。
-                "tcp": f"X{tcp_x:.2f} Y2.34 Z{tcp_z:.2f}",
-                "leftTcp": f"X{tcp_x:.2f} Y2.62 Z{tcp_z:.2f}",
-                "rightTcp": f"X{tcp_x:.2f} Y2.06 Z{tcp_z:.2f}",
-                # 状态页的六个关节摘要，同步反映双臂动作。
-                "joints": [shoulder_deg, -shoulder_deg, elbow_deg, -elbow_deg, round(5 * arm_open_ratio, 1), round(-5 * arm_open_ratio, 1)],
-                # URDF 关节名 -> 弧度值。用于背屏 3D 视图的离线联调：双臂张开。
-                # 实机模式会直接用 ROS joint_states 的同名关节值替代。
-                "jointPositions": {
-                    "Lifting_Z": 0.12,
-                    "Shoulder_X_L": shoulder_angle,
-                    "Shoulder_X_R": -shoulder_angle,
-                    "Shoulder_Y_L": 0.08 * arm_open_ratio,
-                    "Shoulder_Y_R": -0.08 * arm_open_ratio,
-                    "Shoulder_Z_L": 0.10 * arm_open_ratio,
-                    "Shoulder_Z_R": -0.10 * arm_open_ratio,
-                    "Elbow_L": -elbow_angle,
-                    "Elbow_R": elbow_angle,
-                },
-            },
-            "payloadKg": 2.3,
-            "gripForceN": 12.5,
-            "operationMode": "停止中" if self._soft_stopped else "自动",
-            "uptime": f"{uptime_seconds // 3600}h{(uptime_seconds % 3600) // 60:02d}m",
-            "battery": {
-                "percent": 85,
-                "remainingMinutes": 42,
-                "voltage": 14.8,
-                "current": 3.2,
-                "temperature": 28,
-                "cellVoltage": 3.70,
-                "chargeStatus": "充电中",
-                "cycles": 12,
-            },
-            "sensors": {
-                "lidar": True,
-                "depthCamera": True,
-                "forceSensor": True,
-                "bumper": "online",
-                "camera": True,
-                "network": True,
-            },
-            "network": {"ip": "192.168.1.10", "signalStrength": -55},
-        }
-
-    async def work_summary(self) -> dict[str, Any]:
-        return {
-            "lastChargeAh": 100,
-            "triggerAh": 73.5,
-            "lastChargeEndTs": 1754668800,
-            "chargeStartTs": 1754695800,
-            "ratedLoad": 50,
-            "tasks": [
-                {"name": "A 区搬运", "weight": 18.5, "time": "09:12"},
-                {"name": "B 区搬运", "weight": 22.0, "time": "10:26"},
-            ],
-        }
-
-    async def soft_stop(self) -> None:
-        self._soft_stopped = True
-
-    async def diagnostic_alarms(self) -> list[dict[str, Any]]:
-        return []
-
-    async def logs(self) -> list[dict[str, Any]]:
-        """模拟模式没有机器人日志，避免把示例日志伪装成实机记录。"""
-        return []
-
-    async def connection_status(self) -> dict[str, Any]:
-        """Make it explicit that these values are simulated, not real ROS."""
-        return {
-            "telemetryMode": "mock",
-            "dataReady": False,
-            "activeSources": [],
-            "message": "当前使用模拟数据，尚未连接机器人 ROS 数据",
-        }
-
+from .runtime_metrics import BatteryRuntimeEstimator, infer_battery_charge_status
+from .chassis_reset import ChassisResetState
 
 class RosTelemetryProvider:
     """Read the documented NAVI ROS2 SDK main-branch interfaces.
@@ -140,6 +34,7 @@ class RosTelemetryProvider:
             from rcl_interfaces.msg import Log
             from sensor_msgs.msg import BatteryState, Image, JointState, LaserScan, PointCloud2
             from std_srvs.srv import Trigger
+            from std_msgs.msg import String
             try:
                 from chassis_msgs.msg import AGVNewState
             except ImportError:
@@ -205,6 +100,11 @@ class RosTelemetryProvider:
             discharge_sign=int(os.getenv("BATTERY_DISCHARGE_SIGN", "1")),
             stale_seconds=float(os.getenv("ROS_DATA_STALE_SECONDS", "5")),
         )
+        self._battery2_estimator = BatteryRuntimeEstimator(
+            window_seconds=self._battery_estimator.window_seconds,
+            discharge_sign=self._battery_estimator.discharge_sign,
+            stale_seconds=self._battery_estimator.stale_seconds,
+        )
         self._last_seen: dict[str, float] = {}
         # This answers the web UI's key question: has the process recently
         # received a ROS message, not merely started without an error?
@@ -225,6 +125,14 @@ class RosTelemetryProvider:
         # 后续返回了实际型号时仍会覆盖这个兜底值。
         self._configured_robot_model = os.getenv("ROBOT_MODEL", "").strip() or None
         self._control_enabled = os.getenv("ROS_ENABLE_CONTROL", "false").strip().lower() == "true"
+        self._reset_control_enabled = os.getenv("ROS_ENABLE_RESET", "false").strip().lower() == "true"
+        self._reset_machine = ChassisResetState(
+            stale_seconds=self._sensor_timeout,
+            timeout_seconds=float(os.getenv("ROS_RESET_TIMEOUT_SECONDS", "10")),
+        )
+        self._reset_request_lock = asyncio.Lock()
+        self._reset_supervisor_status = None
+        self._reset_supervisor_at = None
         self._snapshot: dict[str, Any] = {
             "robotModel": self._configured_robot_model,
             "motion": {"position": None, "target": None, "speed": None, "tcp": None, "leftTcp": None, "rightTcp": None, "joints": [None] * 6, "jointSummary": [], "jointPositions": {}},
@@ -234,13 +142,17 @@ class RosTelemetryProvider:
             "upperLimbState": None,
             "uptime": None,
             "battery": {"percent": None, "remainingMinutes": None, "voltage": None, "current": None, "temperature": None, "cellVoltage": None, "chargeStatus": None, "cycles": None},
+            "battery2": {"percent": None, "remainingMinutes": None, "voltage": None, "current": None, "temperature": None, "cellVoltage": None, "chargeStatus": None, "cycles": None},
             "sensors": {
                 "lidar": None, "lidar1": None, "lidar2": None,
                 "depthCamera": None, "camera": None, "headCamera": None,
                 "leftWristCamera": None, "rightWristCamera": None,
                 "forceSensor": None, "bumper": None, "network": None,
             },
-            "network": {"ip": None, "signalStrength": None},
+            "network": {"ip": None, "signalStrength": None,
+                        "deviceRole": os.getenv("BACK_SCREEN_DEVICE_ROLE", self._local_resource_source).strip().lower(),
+                        "orinIp": os.getenv("ORIN_IP", "").strip() or None,
+                        "picoIp": os.getenv("PICO_IP", "").strip() or None},
             # 手部与腕部数据单独保存：它们是已确认的真实 Pico 接口，但不应
             # 冒充上肢六轴关节或夹持力。
             "hands": {"left": {"jointPositions": {}, "effort": {}}, "right": {"jointPositions": {}, "effort": {}}},
@@ -266,10 +178,16 @@ class RosTelemetryProvider:
             [f"{ns}/robot/battery_state", f"{ns}/robot/battery_info"],
         ):
             self._node.create_subscription(BatteryState, topic, self._on_battery, 10)
+        for topic in configured_topics(
+            "ROS_BATTERY2_TOPICS", ["/robot/battery2_info", f"{ns}/robot/battery2_info"],
+        ):
+            self._node.create_subscription(
+                BatteryState, topic, lambda message: self._on_battery(message, "battery2"), 10
+            )
         for topic in configured_topics("ROS_ODOM_TOPICS", ["/chassis/odom_info", f"{ns}/chassis/odom_info"]):
             self._node.create_subscription(Odometry, topic, self._on_odom, 10)
         if AGVNewState is not None:
-            for topic in configured_topics("ROS_CHASSIS_STATE_TOPICS", ["/chassis/agv_state"]):
+            for topic in configured_topics("ROS_CHASSIS_STATE_TOPICS", ["/chassis/agv_state", f"{ns}/chassis/agv_state"]):
                 self._node.create_subscription(AGVNewState, topic, self._on_chassis_state, 10)
         else:
             self._node.get_logger().warning("缺少 chassis_msgs/AGVNewState，底盘电池与碰撞状态暂不可解码")
@@ -311,13 +229,20 @@ class RosTelemetryProvider:
             [item.strip() for item in configured_diagnostic_topics.split(",") if item.strip()]
             if configured_diagnostic_topics
             else [
-                "/diagnostics_agg",
+                # 新版设备诊断直接发布在以下接口。旧 /diagnostics_agg 的
+                # Battery/Joints/RobotState 分组未接入新版诊断，不能作为默认来源。
+                "/diagnostics",
+                f"{ns}/robot/diagnostics",
+                f"{ns}/robot/diagnostics/robot_state_node",
                 f"{ns}/robot/orin_states/diagnostics_agg",
                 f"{ns}/robot/pico_states/diagnostics_agg",
             ]
         )
         for diagnostic_topic in dict.fromkeys(diagnostic_topics):
-            self._node.create_subscription(DiagnosticArray, diagnostic_topic, self._on_diagnostics, 10)
+            self._node.create_subscription(
+                DiagnosticArray, diagnostic_topic,
+                lambda message, topic=diagnostic_topic: self._on_diagnostics(message, topic), 10,
+            )
         # /rosout 是 ROS2 标准日志流。只读订阅，最多保留最近 200 条，避免
         # 长时间运行时无限占用内存。
         self._node.create_subscription(Log, "/rosout", self._on_ros_log, 100)
@@ -375,8 +300,14 @@ class RosTelemetryProvider:
             self._node.create_timer(2.0, self._refresh_camera_publishers)
 
         self._basic_info_client = self._node.create_client(BasicInfo, f"{ns}/robot/basic_info") if BasicInfo is not None else None
-        self._stop_service = os.getenv("ROS_STOP_SERVICE", f"{ns}/robot/stop").strip()
+        self._stop_service = os.getenv("ROS_STOP_SERVICE", "").strip() or f"{ns}/chassis/soft_estop"
         self._stop_client = self._node.create_client(Trigger, self._stop_service)
+        # Our motion supervisor owns the actual chassis reset transaction and
+        # motion gate on the chassis host; the HTTP service is its UI client.
+        self._reset_service = f"{ns}/back_screen/reset"
+        self._reset_client = self._node.create_client(Trigger, self._reset_service)
+        self._node.create_subscription(String, f"{ns}/back_screen/reset_status", self._on_reset_supervisor, 1)
+        self._node.create_timer(0.1, self._tick_reset_state)
         self._request_basic_info()
         # 服务可能晚于背屏后端启动；周期重试而不是只在启动瞬间尝试一次。
         if self._basic_info_client is not None:
@@ -443,6 +374,9 @@ class RosTelemetryProvider:
             return
         with self._lock:
             self._snapshot["network"]["ip"] = ip_address
+            role = self._snapshot["network"].get("deviceRole")
+            if role in {"pico", "orin"}:
+                self._snapshot["network"][role + "Ip"] = ip_address
             self._snapshot.setdefault("diagnosticMetrics", {})["network"] = {
                 "interface": interface,
                 "linkState": link_state or "unknown",
@@ -525,13 +459,14 @@ class RosTelemetryProvider:
             store["picoResource"] = metrics
             store["picoResourceErrors"] = flags
 
-    def _on_battery(self, message: Any) -> None:
+    def _on_battery(self, message: Any, source: str = "battery") -> None:
         percent = self._number(message.percentage)
+        if percent is not None and not 0 <= percent <= 1:
+            percent = None
         voltage = self._number(message.voltage)
         current = self._number(message.current)
         temperature = self._number(message.temperature)
         cell_values = [value for value in (self._number(item) for item in getattr(message, "cell_voltage", [])) if value is not None]
-        status_names = {0: "未知", 1: "充电中", 2: "放电中", 3: "未充电", 4: "已充满"}
         # 实机 BMS 未完成初始化时会发布一帧 BatteryState 默认值：电量、
         # 电压、电流均为 0，temperature 甚至可能是未初始化内存中的极大数。
         # 已上电机器人不可能有 0V 电池包，因此将这一整帧视为“无有效数据”，
@@ -543,20 +478,32 @@ class RosTelemetryProvider:
         elif temperature is not None and not -40.0 <= temperature <= 100.0:
             # BatteryState 的温度单位为 °C；超出工程可用范围的值直接丢弃。
             temperature = None
-        charge_status = status_names.get(int(message.power_supply_status), "未知") if valid_pack else None
+        # BatteryState.power_supply_status 在当前实机上持续为默认值 0；
+        # 暂不信任该字段，用有效电压、电量和电流方向推断状态。
+        inferred_status, estimator_status = infer_battery_charge_status(
+            voltage,
+            percent * 100 if percent is not None else None,
+            current,
+            discharge_sign=self._battery_estimator.discharge_sign,
+        ) if valid_pack else (None, 0)
+        charge_status = inferred_status
         with self._lock:
-            if not valid_pack:
+            if not valid_pack and source == "battery":
                 chassis_battery_at = self._active_sources.get("chassis_battery")
                 if chassis_battery_at is not None and time.monotonic() - chassis_battery_at <= self._data_stale_seconds:
                     return
             if valid_pack:
-                self._mark_data_received_locked("battery")
+                self._mark_data_received_locked(source)
                 capacity = self._number(getattr(message, "capacity", None))
                 charge = self._number(getattr(message, "charge", None))
                 if charge is None or charge < 0 or (capacity is not None and capacity > 0 and charge > capacity):
                     charge = percent * capacity if percent is not None and 0 <= percent <= 1 and capacity is not None and capacity > 0 else None
-                self._battery_estimator.observe(charge, current, int(message.power_supply_status))
-            self._snapshot["battery"].update({
+                estimator = self._battery2_estimator if source == "battery2" else self._battery_estimator
+                estimator.observe(charge, current, estimator_status)
+            else:
+                estimator = self._battery2_estimator if source == "battery2" else self._battery_estimator
+                estimator.observe(None, None, 0)
+            self._snapshot[source].update({
                 "percent": round(percent * 100, 1) if percent is not None else None,
                 "voltage": voltage,
                 "current": current,
@@ -574,6 +521,9 @@ class RosTelemetryProvider:
             percent = None
         with self._lock:
             self._mark_data_received_locked("chassis_state")
+            self._reset_machine.update_chassis(
+                bool(message.emergency), bool(message.collision), int(message.state), str(message.description),
+            )
             self._snapshot.setdefault("diagnosticMetrics", {})["chassisState"] = {
                 "code": int(message.state),
                 "description": str(message.description),
@@ -587,6 +537,51 @@ class RosTelemetryProvider:
                     "voltage": voltage,
                     "current": current,
                 })
+
+    def _tick_reset_state(self) -> None:
+        with self._lock:
+            self._reset_machine.tick()
+
+    def _on_reset_supervisor(self, message: Any) -> None:
+        import json
+        try:
+            value = json.loads(message.data)
+            if not isinstance(value, dict) or value.get("owner") != "back_screen_motion_supervisor":
+                return
+            if value.get("state") not in {None, "E_STOP_ACTIVE", "E_STOP_RELEASED", "RESET_REQUESTED", "RESET_DONE"}:
+                return
+            if not isinstance(value.get("resetAllowed"), bool):
+                return
+        except (ValueError, TypeError):
+            return
+        with self._lock:
+            self._reset_supervisor_status = value
+            self._reset_supervisor_at = time.monotonic()
+
+    def _reset_view_locked(self) -> dict[str, Any]:
+        fresh = (self._reset_supervisor_at is not None
+                 and time.monotonic() - self._reset_supervisor_at <= self._sensor_timeout)
+        if not fresh:
+            local = self._reset_machine.view(False, self._reset_control_enabled, self._reset_client.service_is_ready())
+            local["resetAllowed"] = False
+            local["blockReason"] = "复位主控未上线或状态已过期"
+            local["blockReasons"] = [local["blockReason"]]
+            return local
+        view = copy.deepcopy(self._reset_supervisor_status)
+        # Recheck local feedback as well; stale HTTP-side input never grants
+        # permission even when the other computer still reports readiness.
+        reasons = list(view.get("blockReasons") or [])
+        local_reason = self._reset_machine.block_reason()
+        if view.get("resetAllowed") and local_reason:
+            reasons.append(local_reason)
+        if not self._reset_control_enabled:
+            reasons.append("背屏实机复位控制未启用")
+        if not self._reset_client.service_is_ready():
+            reasons.append("复位主控服务不可用")
+        view["blockReasons"] = list(dict.fromkeys(reasons))
+        view["resetAllowed"] = bool(view.get("resetAllowed")) and not reasons
+        view["blockReason"] = reasons[0] if reasons else None
+        return view
 
     def _on_robot_state(self, message: Any) -> None:
         state_info = str(getattr(message, "state_info", ""))
@@ -617,6 +612,10 @@ class RosTelemetryProvider:
         speed = math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
         with self._lock:
             self._mark_data_received_locked("odometry")
+            angular = message.twist.twist.angular
+            self._reset_machine.update_velocity(
+                (velocity.x, velocity.y, velocity.z), (angular.x, angular.y, angular.z),
+            )
             self._snapshot["motion"]["position"] = f"X{position.x:.2f} Y{position.y:.2f} Z{position.z:.2f}"
             self._snapshot["motion"]["speed"] = f"{speed:.2f} m/s"
 
@@ -627,7 +626,7 @@ class RosTelemetryProvider:
             "memoryUsage": self._number(getattr(message, "memory_usage", None)),
             "diskUsage": self._number(getattr(message, "disk_usage", None)),
             "temperature": self._number(getattr(message, "temperature", None)),
-            "gpuUsage": self._number(getattr(message, "gpu_usage", None)),
+            "gpuUsage": (None if source == "pico" else self._number(getattr(message, "gpu_usage", None))),
         }
         with self._lock:
             # Orin 与 Pico 资源必须分别记录新鲜度。否则 Pico 节点停止
@@ -776,8 +775,9 @@ class RosTelemetryProvider:
             self._mark_data_received_locked("upperlimb_state")
             self._snapshot["upperLimbState"] = state
 
-    def _on_diagnostics(self, message: Any) -> None:
-        severity = {1: "warning", 2: "critical", 3: "critical"}
+    def _on_diagnostics(self, message: Any, topic: str = "/diagnostics_agg") -> None:
+        # STALE(3) 是诊断数据缺失/过期，不是硬件 ERROR(2)。保留告警但区分语义。
+        severity = {1: "warning", 2: "critical", 3: "warning"}
         alarms = []
         # Jetson 诊断话题给出每个 CPU 核心的占用率；不要把第一个核心
         # 或 resource 话题中的“最大值”当成整机 CPU。这里计算所有核心平均值。
@@ -808,21 +808,31 @@ class RosTelemetryProvider:
                     level = 0
             if level == 0:
                 continue
+            stale = level == 3
+            name = str(status.name or "系统诊断")
+            display_name = {"/Battery": "电池", "/Joints": "关节", "/RobotState": "整机状态"}.get(name, name)
             alarms.append({
                 "id": f"ros-{index}-{status.name}",
                 "code": f"ROS-{level}",
                 "severity": severity.get(level, "warning"),
-                "title": status.name or "系统诊断异常",
+                "title": f"{display_name}诊断数据过期" if stale else name,
                 "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "desc": status.message or "ROS 诊断汇总发现异常",
-                "suggestion": "请检查对应诊断模块和设备状态",
+                "desc": (f"诊断汇总未及时收到 {name} 的诊断更新。该状态不能单独证明设备硬件故障；原始状态话题可能仍在正常发布。"
+                         if stale else status.message or "ROS 诊断汇总发现异常"),
+                "suggestion": ("检查诊断发布话题、命名空间和汇总节点的订阅配置，同时核实原始数据是否持续更新。"
+                               if stale else "请检查对应诊断模块和设备状态"),
+                "diagnosticName": name,
+                "diagnosticLevel": level,
                 "occurrenceCount": 1,
                 "label": "ROS 诊断汇总",
                 "values": [],
             })
         with self._lock:
             self._mark_data_received_locked("diagnostics")
-            self._diagnostic_alarms = alarms
+            if not hasattr(self, "_diagnostics_by_topic"):
+                self._diagnostics_by_topic = {}
+            self._diagnostics_by_topic[topic] = (time.monotonic(), alarms)
+            self._diagnostic_alarms = self._fresh_diagnostic_alarms_locked()
             if cpu_values:
                 metrics = self._snapshot.setdefault("diagnosticMetrics", {}).setdefault("systemResource", {})
                 metrics["cpuUsage"] = round(sum(cpu_values) / len(cpu_values), 2)
@@ -869,7 +879,7 @@ class RosTelemetryProvider:
             with self._lock:
                 # 空字符串代表服务没有提供型号，保留部署配置的已知型号。
                 self._snapshot["robotModel"] = result.robot_model or self._configured_robot_model
-                self._snapshot["network"]["ip"] = result.ip_address or None
+                self._snapshot["network"]["robotReportedIp"] = result.ip_address or None
 
         future.add_done_callback(save_result)
 
@@ -877,6 +887,9 @@ class RosTelemetryProvider:
         now = time.monotonic()
         with self._lock:
             snapshot = copy.deepcopy(self._snapshot)
+            reset_status = self._reset_view_locked()
+            snapshot["controlState"] = reset_status["state"]
+            snapshot["chassisReset"] = reset_status
             try:
                 with open("/proc/uptime", encoding="ascii") as uptime_file:
                     seconds = int(float(uptime_file.read().split()[0]))
@@ -886,6 +899,9 @@ class RosTelemetryProvider:
             minutes, estimate = self._battery_estimator.estimate()
             snapshot["battery"]["remainingMinutes"] = minutes
             snapshot["battery"]["runtimeEstimate"] = estimate
+            minutes2, estimate2 = self._battery2_estimator.estimate()
+            snapshot["battery2"]["remainingMinutes"] = minutes2
+            snapshot["battery2"]["runtimeEstimate"] = estimate2
             for name in snapshot["sensors"]:
                 seen_at = self._last_seen.get(name)
                 snapshot["sensors"][name] = None if seen_at is None else now - seen_at <= self._sensor_timeout
@@ -915,6 +931,49 @@ class RosTelemetryProvider:
             upper_limb_at = self._active_sources.get("upperlimb_state")
             if upper_limb_at is None or now - upper_limb_at > self._data_stale_seconds:
                 snapshot["upperLimbState"] = None
+            # 其它 ROS 快照字段也必须按各自来源的新鲜度清理；否则页面
+            # 虽然提示离线，仍会保留最后一次收到的手部受力、温度或模式。
+            for side in ("left", "right"):
+                force_source = f"{side}_wrist_force"
+                force_at = self._active_sources.get(force_source)
+                if force_at is None or now - force_at > self._data_stale_seconds:
+                    snapshot.get("wristForces", {}).pop(side, None)
+            hand_at = self._active_sources.get("hand_joint_states")
+            if hand_at is None or now - hand_at > self._data_stale_seconds:
+                snapshot["hands"] = {
+                    "left": {"jointPositions": {}, "effort": {}},
+                    "right": {"jointPositions": {}, "effort": {}},
+                }
+            for source, metric in (("joint_temperature", "maxJointTemperature"), ("joint_errors", "jointErrorCodes")):
+                source_at = self._active_sources.get(source)
+                if source_at is None or now - source_at > self._data_stale_seconds:
+                    snapshot.get("diagnosticMetrics", {}).pop(metric, None)
+            robot_state_at = self._active_sources.get("robot_state", 0)
+            work_status_at = self._active_sources.get("work_status", 0)
+            if max(robot_state_at, work_status_at) == 0 or now - max(robot_state_at, work_status_at) > self._data_stale_seconds:
+                snapshot["operationMode"] = None
+            diagnostics_at = self._active_sources.get("diagnostics")
+            if diagnostics_at is None or now - diagnostics_at > self._data_stale_seconds:
+                self._diagnostic_alarms = []
+                diagnostic_metrics = snapshot.get("diagnosticMetrics", {})
+                if diagnostic_metrics.pop("systemResourceCpuSource", None) == "diagnostics_average":
+                    resource = diagnostic_metrics.get("systemResource")
+                    if isinstance(resource, dict):
+                        resource.pop("cpuUsage", None)
+                # resource 话题可能独立于诊断汇总发布，CPU 均值以外的字段
+                # 只在 resource 自身新鲜时保留。
+            system_resource_at = self._active_sources.get("system_resource")
+            if system_resource_at is None or now - system_resource_at > self._data_stale_seconds:
+                metrics = snapshot.get("diagnosticMetrics", {})
+                if metrics.get("systemResourceCpuSource") == "diagnostics_average":
+                    cpu = (metrics.get("systemResource") or {}).get("cpuUsage")
+                    metrics["systemResource"] = {"cpuUsage": cpu} if cpu is not None else {}
+                else:
+                    metrics.pop("systemResource", None)
+            resource_errors_at = self._active_sources.get("system_resource_errors")
+            if resource_errors_at is None or now - resource_errors_at > self._data_stale_seconds:
+                self._resource_error_flags = {}
+                snapshot.get("diagnosticMetrics", {}).pop("systemResourceErrors", None)
             battery_at = max(self._active_sources.get("battery", 0), self._active_sources.get("chassis_battery", 0))
             if now - battery_at > self._data_stale_seconds:
                 for field in ("percent", "voltage", "current", "temperature", "cellVoltage", "chargeStatus"):
@@ -923,6 +982,9 @@ class RosTelemetryProvider:
                 # AGVNewState 只有三项电池读数，不能延续过期 BatteryState 的其它字段。
                 for field in ("temperature", "cellVoltage", "chargeStatus"):
                     snapshot["battery"][field] = None
+            if now - self._active_sources.get("battery2", 0) > self._data_stale_seconds:
+                for field in ("percent", "voltage", "current", "temperature", "cellVoltage", "chargeStatus"):
+                    snapshot["battery2"][field] = None
             # Pico 资源未持续发布时，不把上一次缓存误报为实时数据。
             pico_resource_at = self._active_sources.get("pico_resource")
             if pico_resource_at is None or now - pico_resource_at > self._data_stale_seconds:
@@ -960,9 +1022,25 @@ class RosTelemetryProvider:
     async def work_summary(self) -> dict[str, Any]:
         return {"lastChargeAh": None, "triggerAh": None, "lastChargeEndTs": None, "chargeStartTs": None, "ratedLoad": None, "tasks": []}
 
+    def _fresh_diagnostic_alarms_locked(self) -> list[dict[str, Any]]:
+        now = time.monotonic()
+        buckets = getattr(self, "_diagnostics_by_topic", {})
+        fresh = {
+            topic: value for topic, value in buckets.items()
+            if now - value[0] <= getattr(self, "_data_stale_seconds", 5)
+        }
+        self._diagnostics_by_topic = fresh
+        # 不同诊断流只更新自己的结果，正常资源消息不能清除其它流的告警。
+        unique = {}
+        for _, alarms in fresh.values():
+            for alarm in alarms:
+                key = (alarm["diagnosticName"], alarm["diagnosticLevel"])
+                unique[key] = alarm
+        return list(unique.values())
+
     async def diagnostic_alarms(self) -> list[dict[str, Any]]:
         with self._lock:
-            alarms = copy.deepcopy(self._diagnostic_alarms)
+            alarms = copy.deepcopy(self._fresh_diagnostic_alarms_locked())
             error_flags = copy.deepcopy(self._resource_error_flags)
         error_labels = {
             "overTemperature": ("资源温度过高", "请检查 Orin 散热、风扇和环境温度"),
@@ -990,27 +1068,40 @@ class RosTelemetryProvider:
         with self._lock:
             return copy.deepcopy(self._logs)
 
-    async def soft_stop(self) -> None:
-        if not self._control_enabled:
-            raise PermissionError("ROS 急停控制默认关闭；确认安全策略后设置 ROS_ENABLE_CONTROL=true")
-        if not self._stop_client.wait_for_service(timeout_sec=1.0):
-            raise RuntimeError("机器人停止服务不可用")
-        future = self._stop_client.call_async(self._Trigger.Request())
+    async def _call_trigger(self, client: Any, service_name: str) -> None:
+        if not client.wait_for_service(timeout_sec=1.0):
+            raise RuntimeError(f"ROS 服务不可用：{service_name}")
+        future = client.call_async(self._Trigger.Request())
         # 不使用 asyncio.to_thread，以兼容机器人 Humble 环境中的 Python 3.8。
         deadline = time.monotonic() + 3.0
         while not future.done() and time.monotonic() < deadline:
             await asyncio.sleep(0.02)
         if not future.done():
-            raise TimeoutError("机器人停止服务超时")
+            raise TimeoutError(f"ROS 服务响应超时：{service_name}")
         result = future.result()
         if not getattr(result, "success", False):
-            raise RuntimeError(getattr(result, "message", "机器人拒绝停止请求"))
+            raise RuntimeError(getattr(result, "message", "") or f"ROS 服务拒绝请求：{service_name}")
+
+    async def soft_stop(self) -> None:
+        if not self._control_enabled:
+            raise PermissionError("底盘软急停控制默认关闭；确认安全策略后设置 ROS_ENABLE_CONTROL=true")
+        await self._call_trigger(self._stop_client, self._stop_service)
+
+    async def reset_chassis(self) -> dict[str, Any]:
+        # 服务调用只在操作员确认后的 HTTP 请求中发生，状态轮询绝不复位。
+        if self._reset_request_lock.locked():
+            raise RuntimeError("复位请求正在处理，不能重复发送")
+        async with self._reset_request_lock:
+            with self._lock:
+                view = self._reset_view_locked()
+                if not view["resetAllowed"]:
+                    return {"sent": False, "message": view["blockReason"]}
+            await self._call_trigger(self._reset_client, self._reset_service)
+            return {"sent": True, "message": "复位主控已受理，运动已锁定；等待任务取消和底盘反馈"}
 
 
-def create_telemetry_provider() -> MockTelemetryProvider | RosTelemetryProvider:
-    mode = os.getenv("TELEMETRY_MODE", "mock").strip().lower()
-    if mode == "mock":
-        return MockTelemetryProvider()
-    if mode == "ros":
-        return RosTelemetryProvider()
-    raise ValueError("TELEMETRY_MODE 仅支持 mock 或 ros")
+def create_telemetry_provider() -> RosTelemetryProvider:
+    mode = os.getenv("TELEMETRY_MODE", "ros").strip().lower()
+    if mode != "ros":
+        raise ValueError("背屏仅支持 ROS 实机数据，请设置 TELEMETRY_MODE=ros")
+    return RosTelemetryProvider()

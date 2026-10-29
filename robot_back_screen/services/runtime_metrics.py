@@ -5,6 +5,34 @@ import math
 import time
 
 
+def infer_battery_charge_status(voltage, percent, current, discharge_sign=1, current_deadband=0.2):
+    """Infer charge state from measured values, without trusting the BMS status code.
+
+    On this robot's observed BatteryState feed, negative current means charging
+    and positive current means discharging. ``discharge_sign`` keeps that wiring
+    convention configurable for deployments with the opposite sign.
+    """
+    try:
+        voltage = float(voltage)
+        current = float(current)
+        percent = None if percent is None else float(percent)
+    except (TypeError, ValueError):
+        return None, 0
+    if not math.isfinite(voltage) or voltage <= 1 or not math.isfinite(current):
+        return None, 0
+    if percent is not None and not math.isfinite(percent):
+        percent = None
+
+    discharge_current = current * (1 if discharge_sign >= 0 else -1)
+    if discharge_current < -current_deadband:
+        return "充电中", 1
+    if discharge_current > current_deadband:
+        return "放电中", 2
+    if percent is not None and percent >= 99.5:
+        return "已充满", 4
+    return "未充电", 3
+
+
 class BatteryRuntimeEstimator:
     def __init__(self, window_seconds=1200, discharge_sign=1, stale_seconds=5, clock=time.monotonic):
         self.window_seconds = max(5, float(window_seconds))
