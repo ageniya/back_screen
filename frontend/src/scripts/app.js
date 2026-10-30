@@ -7,6 +7,9 @@ var ROBOT_DATA_ADAPTER = window.ROBOT_DATA_ADAPTER || null;
 var ROBOT_API_BASE = window.ROBOT_DIAGNOSTIC_API || '';
 var robot3dViewer = null;
 var latestRobotSnapshot = null;
+var snapshotGeneration = 0;
+var snapshotRequestId = 0;
+var appliedSnapshotRequestId = 0;
 // 信息框按打开顺序排列：左上、右上、左下、右下；关闭任一框后其余自动前移。
 var robot3DDataViews = ['motion'];
 
@@ -107,6 +110,8 @@ document.addEventListener('keydown', function(event) {
 
   // ==================== TAB SWITCHING ====================
   function switchTab(tabId, btn) {
+    var selectedContent = document.getElementById('tab-' + tabId);
+    if (!selectedContent) return;
     // 离开工具页时暂停隐藏的 3D WebGL 渲染，避免在状态页仍占用 Pico CPU。
     // 3D 初始化/销毁异常不能影响最基本的页面导航。
     if (tabId !== 'tools' && robot3dViewer && typeof robot3dViewer.pause === 'function') {
@@ -116,14 +121,17 @@ document.addEventListener('keydown', function(event) {
     var contents = document.querySelectorAll('.tab-content');
     contents.forEach(function(c) { c.style.display = 'none'; });
     // Show selected
-    var selectedContent = document.getElementById('tab-' + tabId);
-    if (!selectedContent) return;
     selectedContent.style.display = 'flex';
+    document.documentElement.classList.add('app-ready');
+    if (window.location.hash !== '#tab-' + tabId) {
+      history.replaceState(null, '', '#tab-' + tabId);
+    }
 
     // Update nav active state
     var tabs = document.querySelectorAll('.nav-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    if (btn) btn.classList.add('active');
+    var activeTab = btn || document.querySelector('.nav-tab[data-tab="' + tabId + '"]');
+    if (activeTab) activeTab.classList.add('active');
 
     // Initialize page-specific logic when opened
     if (tabId === 'alerts') initAlertsView();
@@ -186,9 +194,19 @@ document.addEventListener('keydown', function(event) {
   }
 
   var chassisResetPending = false;
+  var chassisResetAwaitingStatus = false;
+  var chassisResetBaselineId = null;
+  var chassisResetStatusTimer = null;
 
   function updateChassisControlState(chassisState, controlState, resetStatus) {
     resetStatus = resetStatus || {};
+    if (chassisResetAwaitingStatus && (controlState === 'RESET_REQUESTED'
+        || controlState === 'RESET_DONE' || controlState === 'E_STOP_ACTIVE'
+        || resetStatus.error || resetStatus.feedbackFresh === false
+        || (typeof resetStatus.requestId === 'number' && resetStatus.requestId !== chassisResetBaselineId))) {
+      chassisResetAwaitingStatus = false;
+      clearTimeout(chassisResetStatusTimer);
+    }
     var emergency = chassisState && chassisState.emergency;
     var estop = document.getElementById('controlStatusBanner');
     if (estop) {
@@ -199,7 +217,7 @@ document.addEventListener('keydown', function(event) {
         estop.classList.add('triggered'); estop.textContent = '急停已触发，请释放按钮';
       } else if (resetStatus.error) {
         estop.classList.add('waiting'); estop.textContent = resetStatus.error;
-      } else if (controlState === 'RESET_REQUESTED' || chassisResetPending) {
+      } else if (controlState === 'RESET_REQUESTED' || chassisResetPending || chassisResetAwaitingStatus) {
         estop.classList.add('pending'); estop.textContent = '复位中，请等待…';
       } else if (controlState === 'E_STOP_RELEASED') {
         estop.classList.add('waiting'); estop.textContent = resetStatus.resetAllowed === true
@@ -213,7 +231,8 @@ document.addEventListener('keydown', function(event) {
       } else estop.textContent = '等待有效底盘状态';
     }
     var reset = document.getElementById('btnChassisReset');
-    if (reset && !chassisResetPending) reset.disabled = resetStatus.resetAllowed !== true || controlState !== 'E_STOP_RELEASED' || emergency !== false;
+    if (reset) reset.disabled = chassisResetPending || chassisResetAwaitingStatus
+      || resetStatus.resetAllowed !== true || controlState !== 'E_STOP_RELEASED' || emergency !== false;
     if (reset) reset.title = (resetStatus.blockReasons || []).join('\n') || resetStatus.blockReason || '点击后需二次确认';
     if (reset) reset.classList.toggle('btn-control-attention', !reset.disabled);
   }
@@ -224,12 +243,28 @@ document.addEventListener('keydown', function(event) {
     showConfirm(promptText, '确认复位').then(function(confirmed) {
       if (!confirmed || button.disabled || chassisResetPending) return;
       var originalText = button.innerHTML;
-      if (buttonId === 'btnChassisReset') chassisResetPending = true;
+      if (buttonId === 'btnChassisReset') {
+        chassisResetPending = true;
+        chassisResetAwaitingStatus = true;
+        chassisResetBaselineId = latestRobotSnapshot && latestRobotSnapshot.chassisReset
+          ? latestRobotSnapshot.chassisReset.requestId : null;
+        snapshotGeneration += 1;
+      }
       button.disabled = true;
+      button.classList.remove('btn-control-attention');
       button.innerHTML = '&#x23F3; ' + pendingText;
       invokeRobotCommand(path, {}, successText).then(function(success) {
         if (buttonId === 'btnChassisReset') {
           chassisResetPending = false;
+          if (!success) chassisResetAwaitingStatus = false;
+          if (chassisResetAwaitingStatus) {
+            clearTimeout(chassisResetStatusTimer);
+            chassisResetStatusTimer = setTimeout(function() {
+              chassisResetAwaitingStatus = false;
+              showNotice('未确认复位结果，请检查底盘反馈和主控状态。');
+              requestSnapshot();
+            }, 15000);
+          }
           // 等待下一份快照决定是否允许再次操作，避免沿用请求前的状态。
           button.disabled = true;
           button.innerHTML = originalText;
@@ -918,6 +953,8 @@ document.addEventListener('keydown', function(event) {
   }
 
   function requestSnapshot() {
+    var generation = snapshotGeneration;
+    var requestId = ++snapshotRequestId;
     var request;
     // 接口模式不能保留 HTML 里的演示初始值。正式数据尚未到来时，先明确显示
     // “--”，避免把示例数字误认成机器人实时状态。
@@ -932,11 +969,15 @@ document.addEventListener('keydown', function(event) {
     else if (ROBOT_API_BASE) request = fetch(ROBOT_API_BASE + '/robot/snapshot').then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); });
     else return;
     request.then(function(data) {
+      if (generation !== snapshotGeneration || requestId < appliedSnapshotRequestId) return;
+      appliedSnapshotRequestId = requestId;
       applySnapshot(data);
       // HTTP mode is decided by /healthz. A successful snapshot can still be
       // a ROS adapter that has not received robot messages yet.
       if (ROBOT_DATA_ADAPTER) setDataSourceState('connected');
     }).catch(function() {
+      if (generation !== snapshotGeneration || requestId < appliedSnapshotRequestId) return;
+      appliedSnapshotRequestId = requestId;
       clearRealtimeSnapshot('接口离线');
       setDataSourceState('offline');
     });
@@ -1029,6 +1070,7 @@ document.addEventListener('keydown', function(event) {
   document.querySelectorAll('.nav-tab').forEach(function(tab) {
     var lastActivationAt = 0;
     function activate(event) {
+      if (event.type === 'click') event.preventDefault();
       // 多种事件可能连续到达；短时间去重以免重复初始化页面。
       var now = Date.now();
       if (now - lastActivationAt < 350) return;
@@ -1041,6 +1083,14 @@ document.addEventListener('keydown', function(event) {
     tab.addEventListener('pointerup', activate);
     tab.addEventListener('click', activate);
   });
+
+  function openTabFromHash() {
+    var tabId = window.location.hash.replace(/^#tab-/, '');
+    if (!['status', 'alerts', 'logs', 'detail', 'tools'].includes(tabId)) tabId = 'status';
+    switchTab(tabId);
+  }
+  window.addEventListener('hashchange', openTabFromHash);
+  openTabFromHash();
 
   if (!ROBOT_DATA_ADAPTER && !ROBOT_API_BASE) clearRealtimeSnapshot('接口未配置');
   if (ROBOT_DATA_ADAPTER || ROBOT_API_BASE) {

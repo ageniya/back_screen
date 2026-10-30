@@ -347,12 +347,12 @@
 
   /* 底部导航的原生链接兜底：即使触摸环境中的 JS 回调异常，浏览器仍会
      更新锚点并仅通过 CSS 切换页面。Firefox 121+ 支持 :has()。 */
-  body:has(.tab-content:target) .tab-content { display: none !important; }
-  body:has(#tab-status:target) #tab-status,
-  body:has(#tab-alerts:target) #tab-alerts,
-  body:has(#tab-logs:target) #tab-logs,
-  body:has(#tab-detail:target) #tab-detail,
-  body:has(#tab-tools:target) #tab-tools { display: flex !important; }
+  html:not(.app-ready) body:has(.tab-content:target) .tab-content { display: none !important; }
+  html:not(.app-ready) body:has(#tab-status:target) #tab-status,
+  html:not(.app-ready) body:has(#tab-alerts:target) #tab-alerts,
+  html:not(.app-ready) body:has(#tab-logs:target) #tab-logs,
+  html:not(.app-ready) body:has(#tab-detail:target) #tab-detail,
+  html:not(.app-ready) body:has(#tab-tools:target) #tab-tools { display: flex !important; }
 
   /* ========== TAB CONTENT PLACEHOLDER ========== */
   .tab-content { flex: 1; display: flex; flex-direction: column; }

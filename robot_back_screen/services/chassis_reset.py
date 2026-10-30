@@ -19,6 +19,8 @@ class ChassisResetState:
         self.state = None
         self.emergency = None
         self.collision = None
+        self.feedback_code = None
+        self.feedback_description = ""
         self.feedback_at = None
         self.speed_at = None
         self.stationary = False
@@ -37,6 +39,8 @@ class ChassisResetState:
         self.feedback_at = now
         self.emergency = emergency
         self.collision = collision
+        self.feedback_code = code
+        self.feedback_description = str(description).strip()
         if emergency:
             self.request_id += 1
             self.state = "E_STOP_ACTIVE"
@@ -58,14 +62,22 @@ class ChassisResetState:
         if previous_emergency is True:
             self.fault_locked = False
             self.state = "E_STOP_RELEASED"
-        if self.state == "RESET_REQUESTED" and self.sent_sequence is not None and self.service_accepted:
-            if code == 4:
-                if str(description).strip() != "等待复位":
-                    self.fail("复位失败，请检查底盘故障", lock=True)
-            elif code in (0, 1, 2, 3, 5) and self.sequence > self.sent_sequence:
-                self.state = "RESET_DONE"
-                self.requested_at = None
-                self.error = None
+        self._check_reset_feedback()
+
+    def _check_reset_feedback(self):
+        # 服务回执与状态话题属于不同通道，二者可能以任意顺序到达。
+        # 必须同时具备成功回执和发送之后的新鲜反馈，不能复用发送前的状态。
+        if (self.state != "RESET_REQUESTED" or self.sent_sequence is None
+                or not self.service_accepted or self.sequence <= self.sent_sequence
+                or not self.fresh() or self.emergency is not False):
+            return
+        if self.feedback_code == 4:
+            if self.feedback_description != "等待复位":
+                self.fail("复位失败，请检查底盘故障", lock=True)
+        elif self.feedback_code in (0, 1, 2, 3, 5):
+            self.state = "RESET_DONE"
+            self.requested_at = None
+            self.error = None
 
     def update_velocity(self, linear, angular):
         values = list(linear) + list(angular)
@@ -133,8 +145,7 @@ class ChassisResetState:
     def accept_response(self, token):
         self.ensure_pending(token)
         self.service_accepted = True
-        # Do not reuse feedback received before service acceptance.
-        self.sent_sequence = self.sequence
+        self._check_reset_feedback()
 
     def fail(self, message, lock=False):
         self.request_id += 1
@@ -154,7 +165,7 @@ class ChassisResetState:
         if not service_ready:
             reasons.append("底盘复位服务不可用")
         velocity_fresh = self.speed_at is not None and self.clock() - self.speed_at <= self.stale_seconds
-        return {"state": self.state, "resetAllowed": not reasons,
+        return {"state": self.state, "requestId": self.request_id, "resetAllowed": not reasons,
                 "blockReason": reasons[0] if reasons else None,
                 "blockReasons": reasons, "error": self.error,
                 "feedbackFresh": self.fresh(), "motionInterlockReady": interlock_ready,

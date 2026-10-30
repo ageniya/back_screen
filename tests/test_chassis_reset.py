@@ -63,16 +63,45 @@ class ResetStateTests(unittest.TestCase):
         self.assertEqual(self.state.state, 'RESET_DONE')
         self.assertFalse(self.state.view(True, True, True)['resetAllowed'])
 
-    def test_pre_ack_feedback_is_not_reset_success(self):
+    def test_post_send_feedback_before_ack_completes_on_successful_ack(self):
         self.released()
         token = self.state.begin()
         self.state.mark_sent(token, require_ack=True)
         self.state.update_chassis(False, False, 1, '空闲中')
         self.assertEqual(self.state.state, 'RESET_REQUESTED')
         self.state.accept_response(token)
+        self.assertEqual(self.state.state, 'RESET_DONE')
+        self.assertFalse(self.state.view(True, True, True)['resetAllowed'])
+        self.state.update_chassis(False, False, 1, '空闲中')
+        self.assertEqual(self.state.state, 'RESET_DONE')
+
+    def test_ack_cannot_reuse_feedback_from_before_send(self):
+        self.released()
+        token = self.state.begin()
+        self.state.update_chassis(False, False, 1, '空闲中')
+        self.state.mark_sent(token, require_ack=True)
+        self.state.accept_response(token)
         self.assertEqual(self.state.state, 'RESET_REQUESTED')
         self.state.update_chassis(False, False, 1, '空闲中')
         self.assertEqual(self.state.state, 'RESET_DONE')
+
+    def test_ack_does_not_complete_waiting_reset_feedback(self):
+        self.released()
+        token = self.state.begin()
+        self.state.mark_sent(token, require_ack=True)
+        self.state.update_chassis(False, False, 4, '等待复位')
+        self.state.accept_response(token)
+        self.assertEqual(self.state.state, 'RESET_REQUESTED')
+
+    def test_ack_rejects_stale_post_send_feedback(self):
+        self.released()
+        token = self.state.begin()
+        self.state.mark_sent(token, require_ack=True)
+        self.state.update_chassis(False, False, 1, '空闲中')
+        self.now = 4
+        with self.assertRaises(RuntimeError):
+            self.state.accept_response(token)
+        self.assertNotEqual(self.state.state, 'RESET_DONE')
 
     def test_other_fault_latches_until_feedback_confirms_fault_cleared(self):
         self.released()
