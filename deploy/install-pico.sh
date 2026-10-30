@@ -16,7 +16,8 @@ task_backup="/var/backups/robot-back-screen/$(date +%Y%m%d-%H%M%S)"
 install -d -m 0755 "$task_target/deploy" /etc/robot-back-screen "$task_backup"
 for task_file in /etc/systemd/system/robot-back-screen-api.service \
                  /etc/systemd/system/robot-back-screen-kiosk.service \
-                 /etc/robot-back-screen/env; do
+                 /etc/robot-back-screen/env \
+                 /etc/gdm3/custom.conf; do
   if [[ -f "$task_file" ]]; then cp -a "$task_file" "$task_backup/$(basename "$task_file")"; fi
 done
 if [[ -d "$task_target/robot_back_screen" ]]; then
@@ -83,6 +84,34 @@ fi
 
 install -m 0644 "$task_root/deploy/robot-back-screen-api.service" /etc/systemd/system/
 install -m 0644 "$task_root/deploy/robot-back-screen-kiosk.service" /etc/systemd/system/
+# Pico 开机自动登录 nav01，桌面起来后由 kiosk.service 打开背屏。
+# 只修改已有 GDM 配置；安装前的文件已备份到 task_backup。
+if [[ -f /etc/gdm3/custom.conf ]]; then
+  /usr/bin/python3 - <<'PY'
+from pathlib import Path
+import re
+path = Path('/etc/gdm3/custom.conf')
+lines = path.read_text().splitlines(keepends=True)
+result = []
+in_daemon = False
+found_daemon = False
+for line in lines:
+    section = re.match(r'^\s*\[([^]]+)\]', line)
+    if section:
+        in_daemon = section.group(1).lower() == 'daemon'
+        result.append(line)
+        if in_daemon:
+            found_daemon = True
+            result.extend(('AutomaticLoginEnable=true\n', 'AutomaticLogin=nav01\n'))
+        continue
+    if in_daemon and re.match(r'^\s*(AutomaticLoginEnable|AutomaticLogin)\s*=', line):
+        continue
+    result.append(line)
+if not found_daemon:
+    result.extend(('\n[daemon]\n', 'AutomaticLoginEnable=true\n', 'AutomaticLogin=nav01\n'))
+path.write_text(''.join(result))
+PY
+fi
 systemctl daemon-reload
 systemctl enable robot-back-screen-api.service robot-back-screen-kiosk.service
 # 停止旧预览实例，否则它会继续占用 8000 端口或盖住新页面。
