@@ -15,6 +15,16 @@
     display: flex; flex-direction: column;
   }
 
+  .confirm-overlay[hidden], .screen-notice[hidden] { display: none; }
+  .confirm-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.72); }
+  .confirm-card { width: min(100%, 440px); padding: 22px; border: 1px solid #555; border-radius: 8px; background: #242424; box-shadow: 0 16px 48px rgba(0,0,0,.5); }
+  .confirm-card h2 { font-size: 19px; margin-bottom: 12px; }
+  .confirm-card p { white-space: pre-line; line-height: 1.65; font-size: 15px; color: #ddd; }
+  .confirm-actions { display: flex; gap: 12px; margin-top: 22px; }
+  .confirm-actions .btn { flex: 1; min-height: 48px; font-size: 16px; }
+  .confirm-cancel { background: #3a3a3a; color: #fff; }
+  .screen-notice { position: fixed; z-index: 1001; left: 50%; bottom: 58px; transform: translateX(-50%); width: min(90vw, 540px); padding: 12px 16px; border: 1px solid #4770a0; border-radius: 6px; background: #223244; color: #fff; text-align: center; line-height: 1.5; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+
   /* ========== TOP STATUS BAR (44px) ========== */
   .top-bar {
     height: 44px;

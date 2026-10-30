@@ -10,6 +10,50 @@ var latestRobotSnapshot = null;
 // 信息框按打开顺序排列：左上、右上、左下、右下；关闭任一框后其余自动前移。
 var robot3DDataViews = ['motion'];
 
+// 页面内确认框不会受浏览器“禁止后续弹窗”设置影响。
+var confirmResolver = null;
+var noticeTimer = null;
+function showNotice(message) {
+  var notice = document.getElementById('screenNotice');
+  notice.textContent = message;
+  notice.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(function() { notice.hidden = true; }, 6000);
+}
+function showConfirm(message, actionLabel) {
+  if (confirmResolver) return Promise.resolve(false);
+  document.getElementById('confirmMessage').textContent = message;
+  document.getElementById('confirmAccept').textContent = actionLabel || '确认';
+  document.getElementById('confirmOverlay').hidden = false;
+  document.getElementById('confirmCancel').focus();
+  return new Promise(function(resolve) { confirmResolver = resolve; });
+}
+function finishConfirm(accepted) {
+  if (!confirmResolver) return;
+  var resolve = confirmResolver;
+  confirmResolver = null;
+  document.getElementById('confirmOverlay').hidden = true;
+  resolve(accepted);
+}
+function bindConfirmButton(id, accepted) {
+  var button = document.getElementById(id);
+  var lastActivationAt = 0;
+  function activate() {
+    var now = Date.now();
+    if (now - lastActivationAt < 500) return;
+    lastActivationAt = now;
+    finishConfirm(accepted);
+  }
+  button.addEventListener('pointerdown', activate);
+  button.addEventListener('touchstart', activate, { passive: true });
+  button.addEventListener('click', activate);
+}
+bindConfirmButton('confirmCancel', false);
+bindConfirmButton('confirmAccept', true);
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape' && confirmResolver) finishConfirm(false);
+});
+
 // ==================== REAL-TIME CLOCK ====================
   function updateClock() {
     var now = new Date();
@@ -111,32 +155,33 @@ var robot3DDataViews = ['motion'];
   // ==================== FAULT CLEAR BUTTON ====================
   function clearFault() {
     if (!alertData.length) {
-      alert('当前没有需要确认恢复的告警。');
+      showNotice('当前没有需要确认恢复的告警。');
       return;
     }
-    if (!confirm('确认已人工排除故障？\n\n系统只会清除已经恢复的告警；仍在触发的故障会保留。')) return;
-
     var btn = document.getElementById('btnFaultClear');
     if (!btn || btn.disabled) return;
-    var originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '&#x23F3; 确认中...';
+    showConfirm('确认已人工排除故障？\n\n系统只会清除已经恢复的告警；仍在触发的故障会保留。', '确认恢复').then(function(confirmed) {
+      if (!confirmed || btn.disabled) return;
+      var originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '&#x23F3; 确认中...';
 
-    invokeRobotCommand('/alarms/clear-recovered', {}, '已请求确认已恢复告警').then(function(success) {
-      if (!success) {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        return;
-      }
-      // Ask the source again instead of pretending that the client cleared a
-      // fault.  The server / real diagnosis engine remains authoritative.
-      requestAlarms();
-      requestSnapshot();
-      btn.innerHTML = '&#x2705; 已确认';
-      setTimeout(function() {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-      }, 1800);
+      invokeRobotCommand('/alarms/clear-recovered', {}, '已请求确认已恢复告警').then(function(success) {
+        if (!success) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          return;
+        }
+        // Ask the source again instead of pretending that the client cleared a
+        // fault.  The server / real diagnosis engine remains authoritative.
+        requestAlarms();
+        requestSnapshot();
+        btn.innerHTML = '&#x2705; 已确认';
+        setTimeout(function() {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }, 1800);
+      });
     });
   }
 
@@ -174,24 +219,26 @@ var robot3DDataViews = ['motion'];
   }
 
   function runConfirmedRobotCommand(buttonId, path, promptText, pendingText, successText) {
-    if (!confirm(promptText)) return;
     var button = document.getElementById(buttonId);
     if (!button || button.disabled) return;
-    var originalText = button.innerHTML;
-    if (buttonId === 'btnChassisReset') chassisResetPending = true;
-    button.disabled = true;
-    button.innerHTML = '&#x23F3; ' + pendingText;
-    invokeRobotCommand(path, {}, successText).then(function(success) {
-      if (buttonId === 'btnChassisReset') {
-        chassisResetPending = false;
-        // 等待下一份快照决定是否允许再次操作，避免沿用请求前的状态。
-        button.disabled = true;
-        button.innerHTML = originalText;
-        requestSnapshot();
-        return;
-      } else button.disabled = false;
-      button.innerHTML = success ? '&#x2713; 已处理' : originalText;
-      if (success) setTimeout(function() { button.innerHTML = originalText; }, 2200);
+    showConfirm(promptText, '确认复位').then(function(confirmed) {
+      if (!confirmed || button.disabled || chassisResetPending) return;
+      var originalText = button.innerHTML;
+      if (buttonId === 'btnChassisReset') chassisResetPending = true;
+      button.disabled = true;
+      button.innerHTML = '&#x23F3; ' + pendingText;
+      invokeRobotCommand(path, {}, successText).then(function(success) {
+        if (buttonId === 'btnChassisReset') {
+          chassisResetPending = false;
+          // 等待下一份快照决定是否允许再次操作，避免沿用请求前的状态。
+          button.disabled = true;
+          button.innerHTML = originalText;
+          requestSnapshot();
+          return;
+        } else button.disabled = false;
+        button.innerHTML = success ? '&#x2713; 已处理' : originalText;
+        if (success) setTimeout(function() { button.innerHTML = originalText; }, 2200);
+      });
     });
   }
 
@@ -205,7 +252,7 @@ var robot3DDataViews = ['motion'];
 
   // ==================== ALERT BANNER CLICK ====================
   function goToAlerts() {
-    alert('跳转至告警中心\n\n当前有 ' + alertData.length + ' 条未处理告警。');
+    showNotice('当前有 ' + alertData.length + ' 条未处理告警。');
     // Auto switch to alerts tab
     var alertsTab = document.querySelector('.nav-tab[data-tab="alerts"]');
     if (alertsTab) switchTab('alerts', alertsTab);
@@ -370,7 +417,7 @@ var robot3DDataViews = ['motion'];
   function investigateAlert() {
     var item = alertData[currentAlertIndex];
     if (!item) return;
-    alert('已开始调查：' + item.code + ' ' + item.title);
+    showNotice('已开始调查：' + item.code + ' ' + item.title);
   }
 
   function showNoActiveAlerts() {
@@ -401,10 +448,11 @@ var robot3DDataViews = ['motion'];
   function resolveAlert() {
     var item = alertData[currentAlertIndex];
     if (!item) return;
-    if (confirm('确认恢复告警 ' + item.code + '？\n' + item.title)) {
+    showConfirm('确认恢复告警 ' + item.code + '？\n' + item.title, '确认恢复').then(function(confirmed) {
+      if (!confirmed) return;
       invokeRobotCommand('/alarms/' + item.id + '/acknowledge', {}, '已确认恢复 ' + item.code)
         .then(function(success) { if (success) acknowledgeAlertLocally(item.id); });
-    }
+    });
   }
 
   // ==================== READ-ONLY 3D ROBOT VIEW ====================
@@ -954,22 +1002,22 @@ var robot3DDataViews = ['motion'];
         return data;
       });
     });
-    else { alert('未接入实机控制接口，未发送控制命令。'); return Promise.resolve(false); }
+    else { showNotice('未接入实机控制接口，未发送控制命令。'); return Promise.resolve(false); }
     return request.then(function(result) {
       if (result && result.accepted === false) {
-        alert(result.message || '命令未执行：对应实机服务尚未接入。');
+        showNotice(result.message || '命令未执行：对应实机服务尚未接入。');
         return false;
       }
       var controlCommand = path === '/commands/soft-stop' || path === '/commands/chassis-reset';
       if (controlCommand && (!result || result.accepted !== true)) {
-        alert('命令未得到后端确认，请检查控制接口。');
+        showNotice('命令未得到后端确认，请检查控制接口。');
         return false;
       }
       var message = controlCommand && result.message ? result.message : successText;
       addLog('info', '命令', message, '背部屏幕');
-      if (controlCommand) alert(message);
+      if (controlCommand) showNotice(message);
       return true;
-    }).catch(function(error) { alert(error.message || '命令未执行，请检查实机连接和权限。'); return false; });
+    }).catch(function(error) { showNotice(error.message || '命令未执行，请检查实机连接和权限。'); return false; });
   }
 
   function exportLogs() { var text = localLogs.map(function(log) { return [log.time, log.label, log.text, log.source].join(','); }).join('\n'); var blob = new Blob(['时间,等级,内容,来源\n' + text], {type:'text/csv;charset=utf-8'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'R1-diagnostic-logs.csv'; a.click(); URL.revokeObjectURL(a.href); }

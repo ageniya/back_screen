@@ -343,6 +343,18 @@
 
 </div><!-- /screen -->
 
+<div class="confirm-overlay" id="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
+  <div class="confirm-card">
+    <h2 id="confirmTitle">请确认操作</h2>
+    <p id="confirmMessage"></p>
+    <div class="confirm-actions">
+      <button class="btn confirm-cancel" id="confirmCancel" type="button">取消</button>
+      <button class="btn btn-primary confirm-accept" id="confirmAccept" type="button">确认</button>
+    </div>
+  </div>
+</div>
+<div class="screen-notice" id="screenNotice" role="status" aria-live="polite" hidden></div>
+
 <script src="/runtime-config.js"></script>
 <script type="module" src="/src/scripts/app.js"></script>
 </body>
