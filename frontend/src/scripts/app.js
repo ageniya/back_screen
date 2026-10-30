@@ -161,7 +161,10 @@ var robot3DDataViews = ['motion'];
           ? '急停已释放，请点击复位' : '急停已释放；' + (resetStatus.blockReason || '暂不可复位');
       } else if (controlState === 'RESET_DONE') {
         estop.classList.add(emergency === false ? 'clear' : 'waiting');
-        stop.textContent = emergency === false ? '复位完成；' : '复位完成，等待底盘急停状态确认';
+        estop.textContent = emergency !== false ? '复位完成，等待底盘急停状态确认'
+          : resetStatus.motionGate && resetStatus.motionGate.taskReconfirmationRequired === false
+            ? '复位完成，可接收新任务'
+            : '复位完成；旧任务已中断，请重新确认任务';
       } else estop.textContent = '等待有效底盘状态';
     }
     var reset = document.getElementById('btnChassisReset');
