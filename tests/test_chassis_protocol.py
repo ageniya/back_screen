@@ -111,6 +111,42 @@ class MainControlBoundaryTests(unittest.IsolatedAsyncioTestCase):
         snapshot = await service.snapshot()
         self.assertEqual(snapshot["health"]["level"], "emergency")
 
+    async def test_generic_ros_levels_are_hidden_for_both_hosts_and_removed_from_counts(self):
+        service = object.__new__(UnifiedDiagnosticsService)
+        service.engine = None
+        service._run_builtin_diagnosis = AsyncMock()
+        service._engine_action = AsyncMock(return_value={})
+        local_ros = [
+            {"id": f"local-{level}", "code": f"ROS-{level}", "severity": "critical"}
+            for level in (1, 2, 3)
+        ]
+        remote_ros = [
+            {"id": f"remote-{level}", "code": f"ROS-{level}", "severity": "critical"}
+            for level in (1, 2, 3)
+        ]
+        resource = {"id": "builtin-pico-memoryUsage", "code": "BUILTIN-PICO-MEMORYUSAGE", "severity": "warning"}
+        specific = {"id": "motor-fault", "code": "MOTOR-42", "severity": "warning"}
+        service._builtin_alarms = [resource]
+        service.telemetry = SimpleNamespace(diagnostic_alarms=AsyncMock(return_value=local_ros))
+        service.orin = SimpleNamespace(fetch=AsyncMock(return_value={"data": remote_ros + [specific]}))
+        service._diagnosis_metrics = {}
+        hidden_ids = {alarm["id"] for alarm in local_ros + remote_ros}
+        service._visible_alarm_ids = set(hidden_ids)
+        service._pending_alarm_since = {alarm_id: 0 for alarm_id in hidden_ids}
+        service._alarm_persist_seconds = 0
+        service._current_snapshot = AsyncMock(return_value={})
+        service.telemetry_status = AsyncMock(return_value={"telemetryMode": "ros", "activeSources": ["pico:diagnostics"]})
+
+        alarms = await service.alarms()
+        self.assertEqual({alarm["id"] for alarm in alarms}, {resource["id"], specific["id"]})
+        self.assertFalse(hidden_ids & service._visible_alarm_ids)
+        self.assertFalse(hidden_ids & service._pending_alarm_since.keys())
+        snapshot = await service.snapshot()
+        self.assertEqual(snapshot["health"]["alertCount"], 2)
+        self.assertEqual(snapshot["health"]["level"], "warning")
+        # 原始诊断数据仍在遥测层，展示层过滤不更改它。
+        self.assertEqual(len(await service.telemetry.diagnostic_alarms()), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

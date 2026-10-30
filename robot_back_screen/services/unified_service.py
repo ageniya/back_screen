@@ -159,6 +159,11 @@ class UnifiedDiagnosticsService:
         combined = orin_alarms + local_alarms
         unique: dict[str, dict[str, Any]] = {}
         for alarm in combined:
+            # ROS-1/2/3 是通用诊断等级，不作为背屏用户告警展示。
+            # 在合并后过滤，兼容尚未升级的 Orin；底层诊断订阅与数据保留。
+            # 过滤发生在计数和健康状态计算之前，避免列表为空但仍报系统异常。
+            if str(alarm.get("code", "")).strip().upper() in {"ROS-1", "ROS-2", "ROS-3"}:
+                continue
             # 上游 over_cpu 依据单核最大值；背屏以当前平均占用及自己的阈值生成统一 CPU 警告。
             raw_title = " ".join(str(alarm.get(key, "")) for key in ("id", "title", "code")).lower()
             usage_warning = any(token in raw_title for token in ("overcpu", "cpuusage", "cpu 占用", "cpu过高", "cpu 过高", "/jtop/cpu"))
