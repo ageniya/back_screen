@@ -1,5 +1,7 @@
 """ROS2/ament packaging entry for the unified robot back-screen."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from setuptools import find_packages, setup
@@ -25,7 +27,7 @@ def web_data_files() -> list[tuple[str, list[str]]]:
 setup(
     name=PACKAGE_NAME,
     version="0.1.0",
-    packages=find_packages(exclude=["test"]),
+    packages=find_packages(include=[PACKAGE_NAME, f"{PACKAGE_NAME}.*"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/robot_back_screen"]),
         (f"share/{PACKAGE_NAME}", ["package.xml", "requirements.txt"]),

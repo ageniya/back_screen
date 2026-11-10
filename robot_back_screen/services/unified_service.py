@@ -121,10 +121,6 @@ class UnifiedDiagnosticsService:
             return await self.engine.request(action, **payload)
         if action == "list_alarms":
             return {"success": True, "alarms": []}
-        if action in {"list_events", "describe_data_view_fields"}:
-            return {"success": True, "events": [], "fields": []}
-        if action == "get_diagnosis_state":
-            return {"success": True, "state": None}
         return {"success": False, "message": "独立诊断引擎未接入"}
 
     @staticmethod
@@ -412,30 +408,6 @@ class UnifiedDiagnosticsService:
         if result.get("sent"):
             self._record("chassis_reset", result.get("message", "主控复位请求已发送"))
         return {"accepted": bool(result.get("sent")), "commandId": str(uuid.uuid4()), **result}
-
-    async def list_rules(self) -> list[dict[str, Any]]:
-        return (await self._engine_action("list_events")).get("events", [])
-
-    async def register_rule(self, event: dict[str, Any]) -> dict[str, Any]:
-        response = await self._engine_action("register", event=event)
-        self._record("rule_register", f"已注册规则 {event.get('name', '')}")
-        return response
-
-    async def update_rule(self, rule_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        response = await self._engine_action("update", event={**event, "id": rule_id})
-        self._record("rule_update", f"已更新规则 {rule_id}")
-        return response
-
-    async def delete_rule(self, rule_id: str) -> dict[str, Any]:
-        response = await self._engine_action("unregister", event={"id": rule_id})
-        self._record("rule_unregister", f"已注销规则 {rule_id}")
-        return response
-
-    async def fields(self) -> list[dict[str, Any]]:
-        return (await self._engine_action("describe_data_view_fields")).get("fields", [])
-
-    async def diagnosis_state(self) -> dict[str, Any]:
-        return await self._engine_action("get_diagnosis_state")
 
     async def logs(self) -> list[dict[str, Any]]:
         telemetry_logs = await self.telemetry.logs()

@@ -51,9 +51,10 @@ Pico 运行 API/网页服务和全屏浏览器两个 systemd 服务；Orin 运�
 | `.env.example` | 后端配置示例；实际环境配置另行提供。 |
 | `tests/` | 本地自动测试，不属于运行中的页面。 |
 | `docs/` | 架构、接口、部署和测试说明。 |
-| `ros2_media_play/`、`deploy/zj-media-play.service` | 独立的视频播放 ROS2 包及其服务，并非背屏页面本身。 |
 
 本机的 `.venv/`、`frontend/node_modules/` 和 `frontend/dist/` 是生成的依赖或构建产物，不提交到 Git；其中 `dist/` 用于后端托管已构建的页面及打包交付，需要时可通过 `npm run build` 重新生成。
+
+仓库仅保留背屏所需源码、3D 模型、部署脚本、使用文档和维护测试。Python 安装范围限定为 `robot_back_screen` 及其子模块。清理后首次开发需重新安装依赖并构建前端；直接拉取仓库不会带上 `.venv/`、`node_modules/` 或 `dist/`。
 
 ## 本机开发
 
@@ -119,7 +120,6 @@ Pico 配置在 `/etc/robot-back-screen/env`，首次安装写入真实 ROS 话�
 - [系统结构](docs/ARCHITECTURE.md)
 - [核心文件说明](docs/核心文件说明.md)
 - [背屏交付与使用手册](docs/背屏交付与使用手册.md)
-- [视频包交付测试](docs/视频包交付测试.md)
 - [前后端接口契约](docs/ROBOT_API_CONTRACT.md)
 - [后端小白指南](docs/backend/BACKEND_GUIDE.md)
 - [ROS 主分支字段映射](docs/backend/ROS_MAIN_FIELD_MAPPING.md)
