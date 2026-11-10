@@ -1,6 +1,6 @@
-# 机器人背屏（统一交付包）
+# 机器人背屏
 
-这是随机器人中间件一起交付的 ROS2 软件包。它把三件事放进同一次版本管理和 `.deb` 升级中：
+更新日期：2026-11-11。项目包含背屏前端、ROS2 数据后端和急停复位主控，使用同一份代码管理：
 
 ```text
 ROS2 真实话题
@@ -12,6 +12,10 @@ frontend/                 背屏网页：状态、告警、日志、作业总结
 
 Pico 运行 API/网页服务和全屏浏览器两个 systemd 服务；Orin 运行底盘复位主控服务。API 同时提供 `/api/v1/...` 和 `/`，机器人上不需要 `npm run dev` 或 5173 端口。
 
+先阅读 [背屏使用说明](docs/背屏交付与使用手册.md)；每项数据的 topic、消息类型和计算来源见 [数据与 topic 对照](docs/backend/ROS_MAIN_FIELD_MAPPING.md)。
+
+代码仓库：内网 [wangyulong/back_screen](http://10.51.33.13/wangyulong/back_screen)，GitHub [ageniya/back_screen](https://github.com/ageniya/back_screen)（私有），分支均为 `main`。文档描述仓库实现，具体机器人是否已部署新版需查看该机文件和服务。
+
 ## 目录
 
 | 目录 | 用途 |
@@ -20,7 +24,7 @@ Pico 运行 API/网页服务和全屏浏览器两个 systemd 服务；Orin 运�
 | `frontend/` | 前端源码；仅开发与构建时需要 Node.js。 |
 | `docs/` | API 契约、架构和 ROS 字段映射。 |
 | `launch/` | ROS2 启动入口。 |
-| `deploy/` | systemd、构建和 Pico 屏幕启动示例。 |
+| `deploy/` | 部署、手动启动、systemd 和屏幕启动脚本。 |
 | `package.xml`、`setup.py` | ROS2/ament 打包定义。 |
 
 ### 文件用途速查
@@ -53,15 +57,15 @@ Pico 运行 API/网页服务和全屏浏览器两个 systemd 服务；Orin 运�
 
 ## 本机开发
 
-前端：
+前端（开发电脑先准备 Node.js 22）：
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-后端：
+后端（需在已加载 ROS2 及消息包的环境中运行，仅支持真实 ROS 数据模式）：
 
 ```bash
 python3 -m venv .venv
@@ -80,21 +84,35 @@ http://127.0.0.1:5173/?api=http://127.0.0.1:8000/api/v1
 
 ## 一键部署与启动
 
-开发电脑先构建网页，再将**整个仓库（包含 `frontend/dist/`）**复制到对应机器人。部署脚本从源码树安装，暂不替代中间件 `.deb` 的制作流程。
+开发电脑先构建网页，再将项目及 `frontend/dist/` 复制到对应机器人。以下命令从项目根目录执行：
 
 ```bash
-cd frontend && npm ci && npm run build && cd ..
+nvm use 22
+npm --prefix frontend ci
+npm --prefix frontend run build
 # Pico 上执行：安装 API、网页、全屏显示，启用两个开机自启服务
 bash deploy/install.sh pico
 # Orin 上执行：确认底盘静止、备份并安装运动门控与复位主控，启用开机自启
 bash deploy/install.sh orin
 ```
 
-Pico 和 Orin 分别只执行自己的命令。安装后需要手动启动时运行 `bash deploy/start.sh pico` 或 `bash deploy/start.sh orin`。查看状态：Pico 用 `systemctl status robot-back-screen-api robot-back-screen-kiosk`；Orin 用 `systemctl status robot-motion-supervisor`。Pico 页面为 `http://127.0.0.1:8000/`。
+安装后手动启动用 `bash deploy/start.sh pico` 或 `bash deploy/start.sh orin`；脚本启动已安装的 systemd 服务，不负责启动整套机器人中间件。Pico 页面为 `http://127.0.0.1:8000/`。
+
+| 常用操作 | 命令 |
+| --- | --- |
+| Pico 仅关闭显示界面 | `sudo systemctl stop robot-back-screen-kiosk.service` |
+| Pico 重新打开显示界面 | `sudo systemctl start robot-back-screen-kiosk.service` |
+| Pico 重启前后端 | `sudo systemctl restart robot-back-screen-api.service robot-back-screen-kiosk.service` |
+| Pico 查看自启动 | `systemctl is-enabled robot-back-screen-api.service robot-back-screen-kiosk.service` |
+| Orin 查看主控状态 | `systemctl status robot-motion-supervisor.service` |
+
+安装脚本会启用开机自启动。Pico 在已有 GDM 配置时设置 `nav01` 自动登录，屏幕启动脚本关闭 GNOME 自动锁屏和 X11 屏保；当前显示配置按 GNOME/GDM、X11、`DISPLAY=:1`、UID 1000 编写。运行中的浏览器关闭后可能被 systemd 再次拉起，需要保持关闭时使用上表的 `stop`。
 
 Pico 配置在 `/etc/robot-back-screen/env`，首次安装写入真实 ROS 话题和两机地址；Orin 配置在 `/etc/robot-back-screen-motion/env`。安装脚本会保留现有 Pico 配置，不覆盖现场修改。Orin 安装会短暂重启实际底盘 ROS 服务并保持运动门控锁定，**不自动调用复位**。有关人工复位及新任务确认，见 [急停复位实现](docs/backend/CHASSIS_RESET.md)。
 
-制作 `.deb` 时应把这两个安装入口和配置、systemd unit 一起纳入交付；`deploy/build_deb.sh` 目前仅生成 ROS 工作空间构建结果，不会产出 `.deb`。首次安装 Python 依赖需要可用的软件源或预备的离线 wheel 包。
+首次安装 Python 依赖需要可用的软件源或事先准备的离线依赖。Pico 可直接通过 ROS2 订阅 Orin 数据；`ORIN_API_BASE` 仅在已有独立 Orin HTTP 后端时配置。`ORIN_IP` 用于显示地址，不表示需要启动第二个 HTTP 后端。
+
+在自己电脑查看时，可用 `ssh -N -L 18000:127.0.0.1:8000 nav01@PICO_IP` 转发后打开 `http://127.0.0.1:18000/`，将 `PICO_IP` 替换为当前地址。
 
 ## 相关文档
 
@@ -105,4 +123,4 @@ Pico 配置在 `/etc/robot-back-screen/env`，首次安装写入真实 ROS 话�
 - [后端小白指南](docs/backend/BACKEND_GUIDE.md)
 - [ROS 主分支字段映射](docs/backend/ROS_MAIN_FIELD_MAPPING.md)
 
-急停复位的部署与验收见 [急停复位实现](docs/backend/CHASSIS_RESET.md)。
+复位按钮的状态条件、调用链路和使用方法见 [急停复位说明](docs/backend/CHASSIS_RESET.md)。

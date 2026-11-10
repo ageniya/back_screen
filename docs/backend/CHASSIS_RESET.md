@@ -1,8 +1,10 @@
-# 背屏急停复位实现与现场测试
+# 背屏急停复位使用与实现
+
+更新日期：2026-11-11。本文描述仓库实现；日常启动、关闭和页面操作见 [使用说明](../背屏交付与使用手册.md)，topic 对照见 [数据来源](ROS_MAIN_FIELD_MAPPING.md)。
 
 本项目实现复位主控，不再等待外部联锁服务。Pico 后端处理网页请求，Orin 上的 `robot-motion-supervisor` 负责实际运动门控、导航任务取消、复位调用和反馈状态机。
 
-## 已部署链路
+## 调用链路
 
 ```text
 Pico 背屏（按钮二次确认）
@@ -15,7 +17,9 @@ Pico 背屏（按钮二次确认）
 
 所有状态和按钮条件由 `/zj_humanoid/back_screen/reset_status`（`std_msgs/msg/String` JSON）提供。背屏还会再次检查本机收到的底盘反馈和速度新鲜度。
 
-底盘的三路 ROS 运动订阅已重映射为门控出口：
+复位按钮使用页面内的二次确认框，不受浏览器“禁止后续弹窗”设置影响。请求处理中禁止重复发送，完成后按钮自动置灰；旧 HTTP 快照不能重新点亮按钮。页面没有软件急停按钮和独立的启动按钮。
+
+Orin 安装脚本将底盘的三路 ROS 运动订阅重映射为门控出口：
 
 | 原入口（门控订阅） | 底盘实际订阅的门控出口 |
 | --- | --- |
@@ -52,30 +56,24 @@ ros2 service call /zj_humanoid/back_screen/confirm_new_task std_srvs/srv/Trigger
 
 Orin：`robot-motion-supervisor.service`，代码位于 `/opt/robot-back-screen-control`。服务启动即锁定；systemd 看门狗监测主控心跳，异常退出后独立停止辅助进程向门控出口发送零速度，再重启主控。命令源停更 0.5 秒也发送零速度。
 
-底盘实机当前由 `zj-humanoid-chassis.service` 管理，不能误重启未承载实际节点的旧 supervisor 服务。安装脚本会确认连续静止、备份 chassis.launch.py，配置三路重映射，再重启实际运行服务。
+安装脚本检查实际运行的 `zj-humanoid-chassis.service` 或 `zj-humanoid-orin-chassis-supervisor.service`，确认连续静止、备份 chassis.launch.py，配置三路重映射，再重启该服务。
 
 ```bash
 # 在包含本项目源码的 Orin 目录运行。会改变底盘 ROS 路由并保持锁定。
-sudo bash deploy/install-motion-supervisor.sh
+bash deploy/install.sh orin
 ```
 
-Pico 的 start-screen.sh 加载 ROS 环境并设置 ROS_ENABLE_RESET=true。该开关只开放人工复位，不会同时开放软件急停接口。前后端不需要手工设置 ROS_RESET_INTERLOCK_SERVICE。
+Pico 的 `deploy/start-pico-api.sh` 加载 ROS 环境，安装配置在 `/etc/robot-back-screen/env` 设置 `ROS_ENABLE_RESET=true`。该开关只开放人工复位，不会同时开放软件急停接口。
 
-## 测试
+安装脚本会为 Pico API、Pico 显示和 Orin 主控启用开机自启动。安装后手动启动使用 `bash deploy/start.sh pico` / `bash deploy/start.sh orin`。
 
-本地纯逻辑测试：
+## 查看状态与日志
 
 ```bash
-python3 -m unittest discover -s tests -v
+# Orin
+systemctl status robot-motion-supervisor.service
+journalctl -u robot-motion-supervisor.service -n 60 --no-pager
+
+# 加载对应 ROS2 环境后，查看主控反馈；此命令只订阅状态
+ros2 topic echo --once /zj_humanoid/back_screen/reset_status
 ```
-
-ROS 集成测试固定使用 Domain 173、本机回环和 `/back_screen_reset_test` 命名空间，采用假的底盘及导航取消服务，不连接机器人：
-
-```bash
-source /etc/naviai/Middleware.env
-python3 tests/ros_reset_integration.py
-```
-
-覆盖启动阻断、人工请求、重复请求拒绝、任务取消顺序、反馈判定、复位不自动恢复、人工新任务确认、实体急停、超时及通信中断。实机部署阶段只检查路由、状态和按钮条件，不自动调用复位或新任务确认。真实底盘复位及 2 秒上电行为仍需由现场操作员点击按钮验收。
-
-物理急停、安全回路和底盘通信故障的硬件行为由供应商实现，必须独立验收。软件测试结果不等同于整机功能安全认证。
