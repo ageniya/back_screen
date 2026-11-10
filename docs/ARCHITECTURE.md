@@ -1,6 +1,6 @@
 # 背屏工程结构
 
-更新日期：2026-11-11。实际操作见 [背屏使用说明](背屏交付与使用手册.md)，各项数据来源见 [topic 对照](backend/ROS_MAIN_FIELD_MAPPING.md)。
+更新日期：2026-11-11。实际操作见 [背屏使用说明](背屏交付与使用手册.md)，各项数据来源见 [topic 对照](backend/ROS_MAIN_FIELD_MAPPING.md)，具体源码职责和修改入口见 [核心文件说明](核心文件说明.md)。
 
 ```text
 robot_back_screen/      Python 后端：ROS2 订阅、数据合并、HTTP API

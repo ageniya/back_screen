@@ -12,7 +12,7 @@ frontend/                 背屏网页：状态、告警、日志、作业总结
 
 Pico 运行 API/网页服务和全屏浏览器两个 systemd 服务；Orin 运行底盘复位主控服务。API 同时提供 `/api/v1/...` 和 `/`，机器人上不需要 `npm run dev` 或 5173 端口。
 
-先阅读 [背屏使用说明](docs/背屏交付与使用手册.md)；每项数据的 topic、消息类型和计算来源见 [数据与 topic 对照](docs/backend/ROS_MAIN_FIELD_MAPPING.md)。
+先阅读 [背屏使用说明](docs/背屏交付与使用手册.md)；每项数据的 topic、消息类型和计算来源见 [数据与 topic 对照](docs/backend/ROS_MAIN_FIELD_MAPPING.md)。接手代码时可阅读 [核心文件说明](docs/核心文件说明.md)，了解重要文件的作用及常见修改入口。
 
 代码仓库：内网 [wangyulong/back_screen](http://10.51.33.13/wangyulong/back_screen)，GitHub [ageniya/back_screen](https://github.com/ageniya/back_screen)（私有），分支均为 `main`。文档描述仓库实现，具体机器人是否已部署新版需查看该机文件和服务。
 
@@ -36,7 +36,7 @@ Pico 运行 API/网页服务和全屏浏览器两个 systemd 服务；Orin 运�
 | `robot_back_screen/main.py` | 后端入口、HTTP 接口和网页服务。 |
 | `robot_back_screen/services/telemetry.py` | 订阅 ROS2 话题并整理机器人状态。 |
 | `robot_back_screen/services/unified_service.py` | 合并数据并提供诊断、告警等服务。 |
-| `robot_back_screen/services/runtime_metrics.py` | 电池状态、运行时长和续航相关计算。 |
+| `robot_back_screen/services/runtime_metrics.py` | 电池充电状态推断和续航计算；开机时长由 `telemetry.py` 读取。 |
 | `robot_back_screen/clients/remote_robot.py` | 请求另一台机器人计算机上的后端数据。 |
 | `robot_back_screen/clients/diagnosis_engine.py` | 可选的外部诊断引擎适配。 |
 | `robot_back_screen/motion_supervisor.py` | 复位主控：底盘运动门控、导航目标取消、状态反馈与超时。 |
@@ -117,6 +117,7 @@ Pico 配置在 `/etc/robot-back-screen/env`，首次安装写入真实 ROS 话�
 ## 相关文档
 
 - [系统结构](docs/ARCHITECTURE.md)
+- [核心文件说明](docs/核心文件说明.md)
 - [背屏交付与使用手册](docs/背屏交付与使用手册.md)
 - [视频包交付测试](docs/视频包交付测试.md)
 - [前后端接口契约](docs/ROBOT_API_CONTRACT.md)
